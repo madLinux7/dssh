@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/madLinux7/dssh-launcher/internal/model"
+	"github.com/madLinux7/dssh/internal/model"
 )
 
 // ErrDuplicateName is returned when a connection name already exists.

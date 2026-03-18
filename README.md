@@ -1,4 +1,4 @@
-# dssh — Dead Simple SSH Launcher
+# dssh — **D**ead **S**imple S**SH**
 
 Dead-simple CLI tool to manage and connect to SSH hosts via saved connections.
 
@@ -18,11 +18,11 @@ Dead-simple CLI tool to manage and connect to SSH hosts via saved connections.
 
 ### From GitHub Releases (recommended)
 
-Download the latest binary for your platform from [Releases](https://github.com/madLinux7/dssh-launcher/releases) and place it in your `$PATH`.
+Download the latest binary for your platform from [Releases](https://github.com/madLinux7/dssh/releases) and place it in your `$PATH`.
 
 ```bash
 # Example for Linux amd64
-curl -L https://github.com/madLinux7/dssh-launcher/releases/latest/download/dssh-linux-amd64 -o dssh
+curl -L https://github.com/madLinux7/dssh/releases/latest/download/dssh-linux-amd64 -o dssh
 chmod +x dssh
 sudo mv dssh /usr/local/bin/
 ```
@@ -32,14 +32,14 @@ sudo mv dssh /usr/local/bin/
 Requires Go 1.23+.
 
 ```bash
-go install github.com/madLinux7/dssh-launcher/cmd/dssh@latest
+go install github.com/madLinux7/dssh/cmd/dssh@latest
 ```
 
 ### Build locally
 
 ```bash
-git clone https://github.com/madLinux7/dssh-launcher.git
-cd dssh-launcher
+git clone https://github.com/madLinux7/dssh.git
+cd dssh
 make build
 ```
 
@@ -176,7 +176,7 @@ dssh is a thin wrapper around your system's `ssh` binary:
 ## Project Structure
 
 ```
-dssh-launcher/
+dssh/
 ├── cmd/dssh/main.go           # Entrypoint
 ├── internal/
 │   ├── cli/                   # Cobra commands (add, rm, list, wizard, root)

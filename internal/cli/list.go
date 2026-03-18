@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/madLinux7/dssh-launcher/internal/db"
+	"github.com/madLinux7/dssh/internal/db"
 	"github.com/spf13/cobra"
 )
 

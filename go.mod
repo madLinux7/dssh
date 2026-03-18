@@ -1,4 +1,4 @@
-module github.com/madLinux7/dssh-launcher
+module github.com/madLinux7/dssh
 
 go 1.25.5
 

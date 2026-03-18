@@ -2,7 +2,7 @@ package tui
 
 import (
 	"github.com/gdamore/tcell/v2"
-	"github.com/madLinux7/dssh-launcher/internal/model"
+	"github.com/madLinux7/dssh/internal/model"
 	"github.com/rivo/tview"
 )
 

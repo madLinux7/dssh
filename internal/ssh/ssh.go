@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/madLinux7/dssh-launcher/internal/model"
+	"github.com/madLinux7/dssh/internal/model"
 )
 
 // ConnectWithKey replaces the current process with ssh using key-based auth.

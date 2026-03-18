@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/madLinux7/dssh-launcher/internal/crypto"
-	"github.com/madLinux7/dssh-launcher/internal/db"
-	"github.com/madLinux7/dssh-launcher/internal/model"
-	"github.com/madLinux7/dssh-launcher/internal/tui"
+	"github.com/madLinux7/dssh/internal/crypto"
+	"github.com/madLinux7/dssh/internal/db"
+	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
