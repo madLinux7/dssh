@@ -1,6 +1,6 @@
 module github.com/madLinux7/dssh
 
-go 1.25.5
+go 1.26.1
 
 require (
 	github.com/gdamore/tcell/v2 v2.13.8
