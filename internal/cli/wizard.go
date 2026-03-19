@@ -101,10 +101,23 @@ func encryptPassword(d *sql.DB, password string) ([]byte, []byte, error) {
 		if err := db.SetSetting(d, "argon2_salt", salt); err != nil {
 			return nil, nil, err
 		}
+		// Store verification token.
+		key := crypto.DeriveKey(passphrase, salt)
+		chk, chkNonce, err := crypto.Encrypt(key, []byte("dssh-verify"))
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := db.SetSetting(d, "passphrase_check", append(chkNonce, chk...)); err != nil {
+			return nil, nil, err
+		}
 	} else {
 		fmt.Print("Enter master passphrase: ")
 		passphrase, err = readPassword()
 		if err != nil {
+			return nil, nil, err
+		}
+		// Verify passphrase against stored token.
+		if err := verifyPassphrase(d, passphrase, salt); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -120,6 +133,10 @@ func encryptPassword(d *sql.DB, password string) ([]byte, []byte, error) {
 
 // decryptPassword prompts for the master passphrase and decrypts a stored password.
 func decryptPassword(d *sql.DB, conn *model.Connection) (string, error) {
+	if len(conn.EncryptedPass) == 0 || len(conn.PassNonce) == 0 {
+		return "", fmt.Errorf("no encrypted password stored for %q", conn.Name)
+	}
+
 	salt, err := db.GetSetting(d, "argon2_salt")
 	if err != nil {
 		return "", err
@@ -134,6 +151,11 @@ func decryptPassword(d *sql.DB, conn *model.Connection) (string, error) {
 		return "", err
 	}
 
+	// Verify passphrase against stored token.
+	if err := verifyPassphrase(d, passphrase, salt); err != nil {
+		return "", err
+	}
+
 	key := crypto.DeriveKey(passphrase, salt)
 	plaintext, err := crypto.Decrypt(key, conn.EncryptedPass, conn.PassNonce)
 	if err != nil {
@@ -141,6 +163,33 @@ func decryptPassword(d *sql.DB, conn *model.Connection) (string, error) {
 	}
 
 	return string(plaintext), nil
+}
+
+// verifyPassphrase checks the entered passphrase against the stored verification token.
+func verifyPassphrase(d *sql.DB, passphrase string, salt []byte) error {
+	chkData, err := db.GetSetting(d, "passphrase_check")
+	if err != nil {
+		return err
+	}
+	if chkData == nil {
+		// No verification token stored (legacy data) — skip verification.
+		return nil
+	}
+	// chkData = nonce + ciphertext; nonce is 12 bytes for AES-GCM.
+	if len(chkData) <= 12 {
+		return fmt.Errorf("corrupted passphrase verification data")
+	}
+	chkNonce := chkData[:12]
+	chkCiphertext := chkData[12:]
+	key := crypto.DeriveKey(passphrase, salt)
+	plain, err := crypto.Decrypt(key, chkCiphertext, chkNonce)
+	if err != nil {
+		return fmt.Errorf("wrong master passphrase")
+	}
+	if string(plain) != "dssh-verify" {
+		return fmt.Errorf("wrong master passphrase")
+	}
+	return nil
 }
 
 func promptPassphraseTwice() (string, error) {

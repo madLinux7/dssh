@@ -55,4 +55,25 @@ var (
 			Foreground(magenta).
 			Bold(true).
 			MarginBottom(1)
+
+	// Passphrase modal styles.
+	modalBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(magenta).
+			Padding(1, 3).
+			Width(48)
+
+	modalTitleStyle = lipgloss.NewStyle().
+			Foreground(brightWhite).
+			Bold(true).
+			MarginBottom(0)
+
+	modalLabelStyle = lipgloss.NewStyle().
+			Foreground(brightWhite).
+			Bold(true).
+			Width(12)
+
+	modalErrorStyle = lipgloss.NewStyle().
+			Foreground(warnRed).
+			Bold(true)
 )
