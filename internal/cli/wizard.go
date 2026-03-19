@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/madLinux7/dssh/internal/crypto"
 	"github.com/madLinux7/dssh/internal/db"
@@ -18,58 +16,67 @@ import (
 
 func newWizardCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "wizard",
-		Short: "Interactive wizard to create a new connection",
-		Args:  cobra.NoArgs,
+		Use:     "wizard",
+		Aliases: []string{"new"},
+		Short:   "Interactive wizard to create a new connection",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result := tui.RunWizard()
-			if result == nil || !result.Submitted {
-				fmt.Println("Cancelled.")
-				return nil
-			}
-
-			if result.Name == "" || result.User == "" || result.Host == "" {
-				return fmt.Errorf("name, user, and host are required")
-			}
-
-			port, err := strconv.Atoi(result.Port)
-			if err != nil || port < 1 || port > 65535 {
-				return fmt.Errorf("invalid port: %s", result.Port)
-			}
-
 			d, err := db.Open()
 			if err != nil {
 				return err
 			}
 			defer d.Close()
 
-			conn := &model.Connection{
-				Name:     result.Name,
-				User:     result.User,
-				Host:     result.Host,
-				Port:     port,
-				AuthType: model.AuthType(result.AuthType),
-			}
-
-			if result.AuthType == "key" && result.IdentityFile != "default" {
-				conn.IdentityFile = expandTilde(result.IdentityFile)
-			} else if result.AuthType == "password" && result.Password != "" {
-				encPass, nonce, err := encryptPassword(d, result.Password)
-				if err != nil {
-					return err
-				}
-				conn.EncryptedPass = encPass
-				conn.PassNonce = nonce
-			}
-
-			if err := db.Insert(d, conn); err != nil {
+			conns, err := db.List(d)
+			if err != nil {
 				return err
 			}
 
-			success("Added connection %q (%s@%s:%d)", conn.Name, conn.User, conn.Host, conn.Port)
+			result := tui.Run(conns, d, tui.TabNew)
+			if result == nil || result.Action == tui.ActionNone {
+				return nil
+			}
+
+			switch result.Action {
+			case tui.ActionConnect:
+				return connect(d, result.Connection, nil)
+			case tui.ActionCreated:
+				return savePasswordAuth(d, result.WizardResult)
+			}
 			return nil
 		},
 	}
+}
+
+// savePasswordAuth encrypts the password and saves the connection.
+// Only called for password-auth connections — validation was already
+// performed by the TUI's handleSave.
+func savePasswordAuth(d *sql.DB, wr *tui.WizardResult) error {
+	port, _ := strconv.Atoi(wr.Port) // already validated by TUI
+
+	conn := &model.Connection{
+		Name:     wr.Name,
+		User:     wr.User,
+		Host:     wr.Host,
+		Port:     port,
+		AuthType: model.AuthPassword,
+	}
+
+	if wr.Password != "" {
+		encPass, nonce, err := encryptPassword(d, wr.Password)
+		if err != nil {
+			return err
+		}
+		conn.EncryptedPass = encPass
+		conn.PassNonce = nonce
+	}
+
+	if err := db.Insert(d, conn); err != nil {
+		return err
+	}
+
+	success("Added connection %q (%s@%s:%d)", conn.Name, conn.User, conn.Host, conn.Port)
+	return nil
 }
 
 // encryptPassword handles master passphrase creation/prompting and encrypts the SSH password.
@@ -134,17 +141,6 @@ func decryptPassword(d *sql.DB, conn *model.Connection) (string, error) {
 	}
 
 	return string(plaintext), nil
-}
-
-func expandTilde(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
 
 func promptPassphraseTwice() (string, error) {

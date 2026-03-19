@@ -15,10 +15,12 @@ func newAddCmd() *cobra.Command {
 	var port int
 
 	cmd := &cobra.Command{
-		Use:   "add [-p PORT] NAME target",
+		Use:   "add [-p PORT] NAME target [password]",
 		Short: "Add a new SSH connection",
-		Long:  `Add a new SSH connection. Target can be user@host or ssh://user@host:port.`,
-		Args:  cobra.ExactArgs(2),
+		Long: `Add a new SSH connection. Target can be user@host or ssh://user@host:port.
+If a password is provided, the connection uses password authentication
+and the password is encrypted with your master passphrase.`,
+		Args: cobra.RangeArgs(2, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			target := args[1]
@@ -47,6 +49,19 @@ func newAddCmd() *cobra.Command {
 				Host:     host,
 				Port:     parsedPort,
 				AuthType: model.AuthKey,
+			}
+
+			// Optional password argument → password auth.
+			if len(args) == 3 {
+				password := args[2]
+				conn.AuthType = model.AuthPassword
+
+				encPass, nonce, err := encryptPassword(d, password)
+				if err != nil {
+					return err
+				}
+				conn.EncryptedPass = encPass
+				conn.PassNonce = nonce
 			}
 
 			if err := db.Insert(d, conn); err != nil {

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/madLinux7/dssh/internal/db"
@@ -81,17 +80,23 @@ func runPicker(extraArgs []string) error {
 		return err
 	}
 
+	initialTab := tui.TabConnect
 	if len(conns) == 0 {
-		fmt.Println("No connections saved. Use 'dssh add' or 'dssh wizard' to create one.")
+		initialTab = tui.TabNew
+	}
+
+	result := tui.Run(conns, d, initialTab)
+	if result == nil {
 		return nil
 	}
 
-	selected := tui.RunPicker(conns)
-	if selected == nil {
-		return nil // user cancelled
+	switch result.Action {
+	case tui.ActionConnect:
+		return connect(d, result.Connection, extraArgs)
+	case tui.ActionCreated:
+		return savePasswordAuth(d, result.WizardResult)
 	}
-
-	return connect(d, selected, extraArgs)
+	return nil
 }
 
 func connectByName(name string, extraArgs []string) error {
