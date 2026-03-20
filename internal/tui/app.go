@@ -27,8 +27,8 @@ import (
 type Tab int
 
 const (
-	TabConnect Tab = iota
-	TabNew
+	TabNew Tab = iota
+	TabConnect
 	TabDelete
 )
 
@@ -66,7 +66,7 @@ func Run(connections []model.Connection, d *sql.DB, initialTab Tab) *AppResult {
 
 	m := AppModel{
 		activeTab:    initialTab,
-		tabs:         []string{"Connect", "New", "Delete"},
+		tabs:         []string{"New", "Connect", "Delete"},
 		connectModel: newConnectModel(connections, 80, 20),
 		newModel:     newNewModel(80, 20),
 		deleteModel:  newDeleteModel(connItems, d, 80, 20),
@@ -141,13 +141,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "1":
 			if m.activeTab != TabNew {
-				m.activeTab = TabConnect
+				m.activeTab = TabNew
 				m.statusMsg = ""
 				return m, nil
 			}
 		case "2":
 			if m.activeTab != TabNew {
-				m.activeTab = TabNew
+				m.activeTab = TabConnect
 				m.statusMsg = ""
 				return m, nil
 			}
