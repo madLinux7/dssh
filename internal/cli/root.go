@@ -1,3 +1,5 @@
+// Package cli implements the Cobra command tree and orchestrates the flow
+// between the TUI, database, crypto, and SSH layers.
 package cli
 
 import (
@@ -92,7 +94,7 @@ func runPicker(extraArgs []string) error {
 
 	switch result.Action {
 	case tui.ActionConnect:
-		return connect(d, result.Connection, extraArgs)
+		return connect(result.Connection, extraArgs)
 	case tui.ActionCreated:
 		return savePasswordAuth(d, result.WizardResult)
 	}
@@ -111,10 +113,13 @@ func connectByName(name string, extraArgs []string) error {
 		return err
 	}
 
-	return connect(d, conn, extraArgs)
+	return connect(conn, extraArgs)
 }
 
-func connect(d interface{ Close() error }, conn *model.Connection, extraArgs []string) error {
+// connect dispatches to the appropriate SSH method based on auth type.
+// Key auth replaces the process via syscall.Exec; password auth runs ssh
+// as a child process with SSH_ASKPASS to supply the decrypted password.
+func connect(conn *model.Connection, extraArgs []string) error {
 	if conn.AuthType == model.AuthPassword {
 		return connectPassword(conn, extraArgs)
 	}

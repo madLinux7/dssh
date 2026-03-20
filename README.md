@@ -1,18 +1,39 @@
 # dssh — **D**ead **S**imple S**SH**
 
-Dead-simple CLI tool to manage and connect to SSH hosts via saved connections.
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Release](https://img.shields.io/github/v/release/madLinux7/dssh?color=7B2FBE&logo=github)](https://github.com/madLinux7/dssh/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows%20%7C%20freebsd-D946EF)](https://github.com/madLinux7/dssh/releases)
+[![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
+[![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
+
+Dead-simple, cross-platform CLI tool to manage all your SSH connections. 
+
+Three simple core features: **Connect, New, Delete**.
+
+Passwords are encrypted using a passphrase.
 
 <!-- TODO: Replace with VHS recording of `dssh` picker + connect flow -->
 ![dssh demo](assets/demo.gif)
 
 ## Features
 
-- **Instant connect** — `dssh myserver` and you're in
-- **Interactive picker** — run `dssh` with no args to choose from a list
-- **Wizard** 🪄 — TUI form to create connections without memorizing flags
-- **Password encryption** — AES-256-GCM + Argon2id, protected by a master passphrase
-- **No dependencies** — single static binary, uses your system's `ssh`
-- **Cross-platform** — Linux, macOS, Windows, FreeBSD (amd64 + arm64)
+- **Instant connect** 🚀 — `dssh myserver` and you're in
+- **Fancy interactive picker** ✨ — run `dssh` with no args to connect, add and delete connections
+- **Wizard** 🪄 — create connections without memorizing flags
+- **Password encryption** 🔒 — AES-256-GCM + Argon2id, protected by a master passphrase
+- **No dependencies** 🗽 — single static binary, uses your system's `ssh`
+- **Cross-platform** 💻 — Linux, macOS, Windows, FreeBSD (amd64 + arm64)
+- **Dead simple migration** 📦 — moving to a new machine? Just copy `~/.dssh/dssh.db`. That's it. Works on all platforms
+
+## How it works
+
+dssh is a thin wrapper around your system's `ssh` binary:
+
+- **Key auth** — `syscall.Exec` replaces the dssh process with ssh (zero overhead, full terminal control)
+- **Password auth** — ssh runs as a child process with `SSH_ASKPASS` to supply the decrypted password (no `sshpass` needed)
+- **Data** — connections stored in SQLite at `~/.dssh/dssh.db`, no config files
+- **Crypto** — AES-256-GCM encryption with Argon2id key derivation for stored passwords
 
 ## Installation
 
@@ -29,7 +50,7 @@ sudo mv dssh /usr/local/bin/
 
 ### From source
 
-Requires Go 1.23+.
+Requires Go 1.26+.
 
 ```bash
 go install github.com/madLinux7/dssh/cmd/dssh@latest
@@ -40,12 +61,15 @@ go install github.com/madLinux7/dssh/cmd/dssh@latest
 ```bash
 git clone https://github.com/madLinux7/dssh.git
 cd dssh
+# Build only with optimized -ldflags
 make build
+# Build and compress binary (upx needed)
+make release
 ```
 
 ## Usage
 
-### Quick start - Let's GO!
+### Quick start - Let's Go!
 
 ```bash
 # Add a connection (will use default pubkey identity)
@@ -56,6 +80,15 @@ dssh myserver
 
 # You're in!
 ```
+
+```bash
+# Open TUI where you can basically do anything (Interactive picker)
+dssh
+```
+
+Run `dssh` with no arguments to launch the connection picker.
+
+Navigate with arrow keys, press Enter to connect, Escape or `q` to cancel.
 
 ### Add a connection
 
@@ -68,6 +101,9 @@ dssh add myserver -p 2222 root@192.168.1.10
 
 # SSH URI syntax
 dssh add myserver ssh://root@192.168.1.10:2222
+
+# With password (will prompt for master passphrase)
+dssh add myserver root@192.168.1.10 'my-ssh-password'
 ```
 
 <!-- TODO: Replace with VHS recording of `dssh add` -->
@@ -83,21 +119,13 @@ dssh myserver
 dssh myserver -- -v -L 8080:localhost:80
 ```
 
-### Interactive picker
-
-Run `dssh` with no arguments to launch the connection picker.
-
-<!-- TODO: Replace with VHS recording of `dssh` picker -->
-![dssh picker](assets/picker.gif)
-
-Navigate with arrow keys, press Enter to connect, Escape or `q` to cancel.
-
 ### Wizard
 
 Create a connection interactively with the TUI wizard.
 
 ```bash
 dssh wizard
+dssh new # alias
 ```
 
 <!-- TODO: Replace with VHS recording of `dssh wizard` -->
@@ -108,7 +136,8 @@ The wizard supports both key-based and password-based authentication. For passwo
 ### List connections
 
 ```bash
-dssh list    # or: dssh ls
+dssh list
+dssh ls # alias
 ```
 
 ```
@@ -156,40 +185,22 @@ All data lives in `~/.dssh/dssh.db` (SQLite).
 | `dssh` | Launch interactive connection picker |
 | `dssh <name>` | Connect to a saved host by name |
 | `dssh <name> -- <args>` | Connect with extra args forwarded to ssh |
-| `dssh add [-p PORT] <name> <target>` | Save a new connection |
+| `dssh add [-p PORT] <name> <target> [password]` | Save a new connection |
 | `dssh rm <name>` | Delete a saved connection |
-| `dssh list` | List all saved connections |
-| `dssh wizard` | Interactive form to create a connection |
+| `dssh list` / `dssh ls` | List all saved connections |
+| `dssh wizard` / `dssh new` | Interactive form to create a connection |
 | `dssh reset` | Delete all data (double confirmation) |
 | `dssh --version` | Print version |
 
-## How It Works
+## ✨ Acknowledgements ✨
 
-dssh is a thin wrapper around your system's `ssh` binary:
+dssh stands on the shoulders of giants. Huge thanks to the maintainers and contributors of these amazing projects:
 
-- **Key auth** — `syscall.Exec` replaces the dssh process with ssh (zero overhead, full terminal control)
-- **Password auth** — ssh runs as a child process with `SSH_ASKPASS` to supply the decrypted password (no `sshpass` needed)
-- **Data** — connections stored in SQLite at `~/.dssh/dssh.db`, no config files
-- **Crypto** — AES-256-GCM encryption with Argon2id key derivation for stored passwords
-
-
-## Project Structure
-
-```
-dssh/
-├── cmd/dssh/main.go           # Entrypoint
-├── internal/
-│   ├── cli/                   # Cobra commands (add, rm, list, wizard, root)
-│   ├── crypto/                # AES-256-GCM + Argon2id
-│   ├── db/                    # SQLite (connections + settings)
-│   ├── model/                 # Connection struct
-│   ├── ssh/                   # ssh exec (key auth) + SSH_ASKPASS (password auth)
-│   └── tui/                   # tview picker + wizard
-├── .github/workflows/         # CI/CD
-├── Makefile
-└── go.mod
-```
-
-## License
-
-MIT
+- **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** by [Charm](https://charm.sh) — a sick TUI framework that powers the picker, wizard, and delete views
+- **[Bubbles](https://github.com/charmbracelet/bubbles)** by [Charm](https://charm.sh) — ready-made TUI components (lists, text inputs) so I don't need to reinvent the wheel
+- **[Lip Gloss](https://github.com/charmbracelet/lipgloss)** by [Charm](https://charm.sh) — style definitions that make the terminal look ✨ pretty ✨
+- **[Cobra](https://github.com/spf13/cobra)** by [Steve Francia](https://github.com/spf13) — the CLI framework powering every `dssh` command
+- **[modernc.org/sqlite](https://gitlab.com/cznic/sqlite)** by [Jan Mercl](https://gitlab.com/cznic) — pure-Go SQLite driver that lets you ship a single static binary with zero CGO
+- **[golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto)** by the Go team — Argon2id key derivation keeping your passwords safe
+- **[golang.org/x/term](https://pkg.go.dev/golang.org/x/term)** by the Go team — secure terminal password reading without echo
+- **[UPX](https://upx.github.io/)** by Markus Oberhumer, Laszlo Molnar & John Reiser - Reducing the release binary by an **insane 62%**! (8.4MB _Regular Go binary_ -> 3.2.MB _Release binary_)

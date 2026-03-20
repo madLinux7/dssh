@@ -39,7 +39,7 @@ func newWizardCmd() *cobra.Command {
 
 			switch result.Action {
 			case tui.ActionConnect:
-				return connect(d, result.Connection, nil)
+				return connect(result.Connection, nil)
 			case tui.ActionCreated:
 				return savePasswordAuth(d, result.WizardResult)
 			}
@@ -79,7 +79,11 @@ func savePasswordAuth(d *sql.DB, wr *tui.WizardResult) error {
 	return nil
 }
 
-// encryptPassword handles master passphrase creation/prompting and encrypts the SSH password.
+// encryptPassword handles the full passphrase → encryption flow for CLI usage.
+// On first call: prompts to create a master passphrase, generates an Argon2id salt,
+// and stores an encrypted verification token.
+// On subsequent calls: prompts for the existing passphrase and verifies it.
+// Returns the encrypted SSH password and its AES-GCM nonce.
 func encryptPassword(d *sql.DB, password string) ([]byte, []byte, error) {
 	salt, err := db.GetSetting(d, "argon2_salt")
 	if err != nil {

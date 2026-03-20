@@ -1,3 +1,9 @@
+// Package crypto provides password encryption using AES-256-GCM with Argon2id key derivation.
+//
+// Flow: passphrase + salt → Argon2id → 256-bit key → AES-GCM encrypt/decrypt.
+// The salt is stored in the database; the passphrase is never persisted.
+// A verification token ("dssh-verify") is encrypted and stored so the passphrase
+// can be validated on subsequent entries without storing it in plaintext.
 package crypto
 
 import (

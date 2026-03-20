@@ -3,7 +3,6 @@ package tui
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -13,11 +12,15 @@ import (
 	"github.com/madLinux7/dssh/internal/model"
 )
 
+// confirmExpiredMsg resets the confirmation sequence after a timeout.
+// The generation field prevents stale timeouts from clearing a new sequence.
 type confirmExpiredMsg struct {
 	generation int
 }
 
 // DeleteModel is the Bubble Tea model for the Delete tab.
+// Deletion requires pressing Enter 3 times on the same item within a 1-second
+// window. Moving the cursor or letting the timer expire resets the count.
 type DeleteModel struct {
 	list              list.Model
 	database          *sql.DB
@@ -156,16 +159,5 @@ func (m *DeleteModel) SetSize(w, h int) {
 
 // AddItem inserts a connection in descending alphabetical position.
 func (m *DeleteModel) AddItem(conn model.Connection) {
-	items := m.list.Items()
-	newName := strings.ToLower(conn.Name)
-	pos := len(items)
-	for i, item := range items {
-		if ci, ok := item.(connectionItem); ok {
-			if newName > strings.ToLower(ci.conn.Name) {
-				pos = i
-				break
-			}
-		}
-	}
-	m.list.InsertItem(pos, connectionItem{conn: conn})
+	insertItemSorted(&m.list, conn)
 }

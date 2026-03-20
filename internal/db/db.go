@@ -1,3 +1,9 @@
+// Package db manages the SQLite database at ~/.dssh/dssh.db.
+//
+// Uses a pure-Go SQLite driver (modernc.org/sqlite) so the binary can be
+// built with CGO_ENABLED=0 for fully static, cross-platform binaries.
+// Two tables: connections (SSH connection configs) and settings (key-value store
+// for crypto salt and passphrase verification token).
 package db
 
 import (

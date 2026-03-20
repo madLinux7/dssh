@@ -1,3 +1,12 @@
+// Package ssh handles launching SSH connections by building command arguments
+// and executing the ssh binary.
+//
+// Two auth modes are supported:
+//   - Key auth: replaces the current process with ssh via syscall.Exec (Unix)
+//     or runs it as a child process (Windows).
+//   - Password auth: creates a temporary askpass script that echoes the password,
+//     then runs ssh as a child process with SSH_ASKPASS + SSH_ASKPASS_REQUIRE=force.
+//     This avoids a dependency on sshpass and works cross-platform.
 package ssh
 
 import (
@@ -62,6 +71,9 @@ func ConnectWithPassword(conn *model.Connection, password string, extraArgs []st
 	return cmd.Run()
 }
 
+// buildArgs constructs the ssh command-line arguments.
+// For password auth, it forces password-only authentication via SSH options
+// to prevent ssh from trying key-based auth first.
 func buildArgs(conn *model.Connection, extraArgs []string) []string {
 	args := []string{"ssh"}
 
@@ -84,6 +96,9 @@ func buildArgs(conn *model.Connection, extraArgs []string) []string {
 	return args
 }
 
+// writeAskpassScript creates a temporary script that echoes the SSH password.
+// SSH calls this script via SSH_ASKPASS when it needs the password.
+// The script is deleted by the caller after ssh exits.
 func writeAskpassScript(password string) (string, error) {
 	tmpDir := os.TempDir()
 	var name, content string
@@ -123,6 +138,8 @@ func writeAskpassScript(password string) (string, error) {
 	return abs, nil
 }
 
+// escapeShellSingleQuote escapes single quotes for safe embedding in a
+// single-quoted shell string. Each ' becomes '\'' (end quote, escaped quote, start quote).
 func escapeShellSingleQuote(s string) string {
 	result := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {

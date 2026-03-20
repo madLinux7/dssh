@@ -1,3 +1,10 @@
+// Package tui implements the interactive terminal UI using Bubble Tea.
+//
+// Architecture: The TUI follows Bubble Tea's Elm-like pattern (Model → Update → View).
+// AppModel is the top-level model that manages three tab sub-models (Connect, New, Delete)
+// and an optional passphrase modal overlay. Each sub-model handles its own input and
+// rendering, while AppModel coordinates tab switching, saves, and result propagation
+// back to the CLI layer.
 package tui
 
 import (
@@ -204,24 +211,23 @@ func (m AppModel) handleSave(wr *WizardResult) (AppModel, tea.Cmd) {
 	}
 
 	if wr.Name == "" || wr.Host == "" {
-		m.statusMsg = "Error: name and host are required"
-		m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("name and host are required")
 		return m, nil
 	}
 
 	port, err := strconv.Atoi(wr.Port)
 	if err != nil || port < 1 || port > 65535 {
-		m.statusMsg = fmt.Sprintf("Error: invalid port: %s", wr.Port)
-		m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("invalid port: %s", wr.Port)
 		return m, nil
 	}
 
-	// Password auth — show passphrase modal.
+	// Password auth — show passphrase modal instead of saving directly.
+	// The modal collects the master passphrase, then finalizePasswordSave
+	// encrypts the SSH password and persists the connection.
 	if wr.AuthType == "password" {
 		salt, err := db.GetSetting(m.database, "argon2_salt")
 		if err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+			m.setError("%s", err)
 			return m, nil
 		}
 		isNew := salt == nil
@@ -244,77 +250,51 @@ func (m AppModel) handleSave(wr *WizardResult) (AppModel, tea.Cmd) {
 	}
 
 	if err := db.Insert(m.database, conn); err != nil {
-		m.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("%s", err)
 		return m, nil
 	}
 
-	// Fetch saved connection (with ID) and update lists.
-	saved, _ := db.GetByName(m.database, conn.Name)
+	m.onConnectionSaved(conn.Name)
+	return m, nil
+}
+
+// onConnectionSaved updates the Connect/Delete lists and resets the New form
+// after a connection is successfully persisted.
+func (m *AppModel) onConnectionSaved(name string) {
+	saved, _ := db.GetByName(m.database, name)
 	if saved != nil {
 		m.connectModel.AddItem(*saved)
 		m.deleteModel.AddItem(*saved)
 	}
-
-	m.statusMsg = fmt.Sprintf("%q added", conn.Name)
+	m.statusMsg = fmt.Sprintf("%q added", name)
 	m.statusMsgStyle = successStyle
 	m.newModel = m.newModel.reset()
-	return m, nil
 }
 
 // finalizePasswordSave encrypts the password with the given passphrase and saves the connection.
+// Called after the passphrase modal returns a passphrase. On first use, it creates the
+// Argon2id salt and stores an encrypted verification token ("dssh-verify") so future
+// passphrase entries can be validated without storing the passphrase itself.
 func (m AppModel) finalizePasswordSave(passphrase string) AppModel {
 	wr := m.pendingWizard
-
 	if wr == nil {
-		m.statusMsg = "Error: no pending connection"
-		m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("no pending connection")
 		return m
 	}
 
 	port, _ := strconv.Atoi(wr.Port)
 
-	// Ensure salt exists (create if first time).
-	salt, err := db.GetSetting(m.database, "argon2_salt")
+	salt, isNew, err := m.ensureSalt(passphrase)
 	if err != nil {
-		m.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("%s", err)
 		m.pendingWizard = nil
 		return m
 	}
-	if salt == nil {
-		salt, err = crypto.GenerateSalt()
-		if err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			m.pendingWizard = nil
-			return m
-		}
-		if err := db.SetSetting(m.database, "argon2_salt", salt); err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			m.pendingWizard = nil
-			return m
-		}
-		// Store verification token.
-		key := crypto.DeriveKey(passphrase, salt)
-		chk, chkNonce, err := crypto.Encrypt(key, []byte("dssh-verify"))
-		if err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			m.pendingWizard = nil
-			return m
-		}
-		if err := db.SetSetting(m.database, "passphrase_check", append(chkNonce, chk...)); err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			m.pendingWizard = nil
-			return m
-		}
-	} else {
-		// Verify passphrase against stored token.
+
+	// If salt already existed, verify the passphrase against the stored token.
+	if !isNew {
 		if err := m.verifyPassphraseTUI(passphrase, salt); err != nil {
-			// Wrong passphrase — re-show modal with error.
+			// Wrong passphrase — re-show modal with error for retry.
 			m.modal = newPassphraseModal(false, m.width, m.height)
 			m.modal.errMsg = err.Error()
 			m.showModal = true
@@ -335,8 +315,7 @@ func (m AppModel) finalizePasswordSave(passphrase string) AppModel {
 	if wr.Password != "" {
 		ciphertext, nonce, err := crypto.Encrypt(key, []byte(wr.Password))
 		if err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+			m.setError("%s", err)
 			m.pendingWizard = nil
 			return m
 		}
@@ -345,28 +324,53 @@ func (m AppModel) finalizePasswordSave(passphrase string) AppModel {
 	}
 
 	if err := db.Insert(m.database, conn); err != nil {
-		m.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("%s", err)
 		m.pendingWizard = nil
 		return m
 	}
 
 	m.pendingWizard = nil
-
-	// Fetch saved connection (with ID) and update lists.
-	saved, _ := db.GetByName(m.database, conn.Name)
-	if saved != nil {
-		m.connectModel.AddItem(*saved)
-		m.deleteModel.AddItem(*saved)
-	}
-
-	m.statusMsg = fmt.Sprintf("%q added", conn.Name)
-	m.statusMsgStyle = successStyle
-	m.newModel = m.newModel.reset()
+	m.onConnectionSaved(conn.Name)
 	return m
 }
 
+// ensureSalt returns the existing Argon2id salt or creates a new one (first-time setup).
+// On first use it also stores an encrypted verification token so the passphrase can be
+// validated on subsequent entries without storing it in plaintext.
+// Does NOT verify the passphrase — caller must do that when salt already exists.
+func (m AppModel) ensureSalt(passphrase string) ([]byte, bool, error) {
+	salt, err := db.GetSetting(m.database, "argon2_salt")
+	if err != nil {
+		return nil, false, err
+	}
+	if salt != nil {
+		return salt, false, nil
+	}
+
+	// First time — generate salt and store verification token.
+	salt, err = crypto.GenerateSalt()
+	if err != nil {
+		return nil, true, err
+	}
+	if err := db.SetSetting(m.database, "argon2_salt", salt); err != nil {
+		return nil, true, err
+	}
+
+	key := crypto.DeriveKey(passphrase, salt)
+	chk, chkNonce, err := crypto.Encrypt(key, []byte("dssh-verify"))
+	if err != nil {
+		return nil, true, err
+	}
+	if err := db.SetSetting(m.database, "passphrase_check", append(chkNonce, chk...)); err != nil {
+		return nil, true, err
+	}
+
+	return salt, true, nil
+}
+
 // verifyPassphraseTUI checks the passphrase against the stored verification token.
+// The token is stored as nonce (12 bytes) + ciphertext, encrypted with the derived key.
+// If decryption yields "dssh-verify", the passphrase is correct.
 func (m AppModel) verifyPassphraseTUI(passphrase string, salt []byte) error {
 	chkData, err := db.GetSetting(m.database, "passphrase_check")
 	if err != nil {
@@ -450,6 +454,12 @@ func (m AppModel) View() string {
 		tabBar.String(),
 		contentBox,
 	)
+}
+
+// setError sets the status bar to an error message.
+func (m *AppModel) setError(format string, a ...any) {
+	m.statusMsg = fmt.Sprintf("Error: "+format, a...)
+	m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 }
 
 func expandTildeTUI(path string) string {

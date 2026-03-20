@@ -14,7 +14,10 @@ type PassphraseResult struct {
 	Cancelled  bool
 }
 
-// PassphraseModal is a Bubble Tea sub-model for the passphrase overlay.
+// PassphraseModal is a Bubble Tea sub-model rendered as a centered overlay.
+// It has two modes: "create" (first-time setup, two fields with confirmation)
+// and "enter" (subsequent use, single field). When active, it captures all
+// keyboard input, preventing interaction with the underlying tab.
 type PassphraseModal struct {
 	isNew    bool // true = create (two fields), false = enter (one field)
 	inputs   [2]textinput.Model

@@ -9,6 +9,8 @@ import (
 )
 
 // connectionItem wraps a Connection for the bubbles/list component.
+// Implements list.Item (Title, Description, FilterValue) for use in
+// both the Connect and Delete tab lists.
 type connectionItem struct {
 	conn model.Connection
 }
@@ -85,7 +87,14 @@ func (m *ConnectModel) SetSize(w, h int) {
 
 // AddItem inserts a connection in descending alphabetical position.
 func (m *ConnectModel) AddItem(conn model.Connection) {
-	items := m.list.Items()
+	insertItemSorted(&m.list, conn)
+}
+
+// insertItemSorted inserts a connectionItem into a bubbles/list in
+// descending alphabetical order (Z→A) by connection name.
+// Used by both ConnectModel and DeleteModel to keep lists sorted after adds.
+func insertItemSorted(l *list.Model, conn model.Connection) {
+	items := l.Items()
 	newName := strings.ToLower(conn.Name)
 	pos := len(items)
 	for i, item := range items {
@@ -96,7 +105,7 @@ func (m *ConnectModel) AddItem(conn model.Connection) {
 			}
 		}
 	}
-	m.list.InsertItem(pos, connectionItem{conn: conn})
+	l.InsertItem(pos, connectionItem{conn: conn})
 }
 
 // RemoveByName removes the first item matching the given connection name.
