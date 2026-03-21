@@ -54,9 +54,9 @@ type AppModel struct {
 
 // Run launches the TUI and returns the user's action.
 func Run(connections []model.Connection, d *sql.DB, initialTab Tab) *AppResult {
-	// Sort connections descending (Z→A).
+	// Sort connections ascending (A→Z).
 	sort.Slice(connections, func(i, j int) bool {
-		return strings.ToLower(connections[i].Name) > strings.ToLower(connections[j].Name)
+		return strings.ToLower(connections[i].Name) < strings.ToLower(connections[j].Name)
 	})
 
 	connItems := make([]connectionItem, len(connections))
@@ -210,6 +210,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m AppModel) handleSave(wr *WizardResult) (AppModel, tea.Cmd) {
 	if wr.User == "" {
 		wr.User = "root"
+	}
+	if wr.Port == "" {
+		wr.Port = "22"
+	}
+	if wr.IdentityFile == "" {
+		wr.IdentityFile = "default"
 	}
 
 	if wr.Name == "" || wr.Host == "" {

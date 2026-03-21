@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -84,28 +83,3 @@ var (
 			Foreground(warnRed).
 			Bold(true)
 )
-
-// newConnectionList creates a styled list for connection items.
-func newConnectionList(items []list.Item, accentColor lipgloss.Color, width, height int) list.Model {
-	delegate := list.NewDefaultDelegate()
-	bullet := lipgloss.NormalBorder()
-	bullet.Left = "•"
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(accentColor).
-		BorderStyle(bullet).
-		BorderLeftForeground(accentColor)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(dimGray).
-		BorderStyle(bullet).
-		BorderLeftForeground(accentColor)
-	delegate.ShowDescription = false
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
-
-	l := list.New(items, delegate, width, height-4)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
-	return l
-}

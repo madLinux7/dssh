@@ -221,21 +221,8 @@ func (m *DeleteModel) SetSize(w, h int) {
 	m.list.SetSize(w, h-4)
 }
 
-// AddItem inserts a connection in descending alphabetical position.
+// AddItem inserts a connection in ascending alphabetical position.
 func (m *DeleteModel) AddItem(conn model.Connection) {
-	newItem := list.Item(connectionItem{conn: conn})
-	newName := strings.ToLower(conn.Name)
-	pos := len(m.allItems)
-	for i, item := range m.allItems {
-		if ci, ok := item.(connectionItem); ok {
-			if newName > strings.ToLower(ci.conn.Name) {
-				pos = i
-				break
-			}
-		}
-	}
-	m.allItems = append(m.allItems, nil)
-	copy(m.allItems[pos+1:], m.allItems[pos:])
-	m.allItems[pos] = newItem
+	m.allItems = insertItemSorted(m.allItems, conn)
 	m.applyFilter()
 }

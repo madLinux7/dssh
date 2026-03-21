@@ -32,7 +32,7 @@ func newNewModel(width, height int) NewModel {
 	var inputs [fieldCount]textinput.Model
 
 	inputs[fieldName] = textinput.New()
-	inputs[fieldName].Placeholder = "my-server"
+	inputs[fieldName].Placeholder = "(required)"
 	inputs[fieldName].CharLimit = 64
 	inputs[fieldName].Width = 30
 	inputs[fieldName].Focus()
@@ -41,24 +41,21 @@ func newNewModel(width, height int) NewModel {
 
 	inputs[fieldUser] = textinput.New()
 	inputs[fieldUser].Placeholder = "root"
-	inputs[fieldUser].SetValue("root")
 	inputs[fieldUser].CharLimit = 64
 	inputs[fieldUser].Width = 30
 
 	inputs[fieldHost] = textinput.New()
-	inputs[fieldHost].Placeholder = "192.168.1.1"
+	inputs[fieldHost].Placeholder = "(required)"
 	inputs[fieldHost].CharLimit = 255
 	inputs[fieldHost].Width = 30
 
 	inputs[fieldPort] = textinput.New()
 	inputs[fieldPort].Placeholder = "22"
-	inputs[fieldPort].SetValue("22")
 	inputs[fieldPort].CharLimit = 5
 	inputs[fieldPort].Width = 10
 
 	inputs[fieldIdentityFile] = textinput.New()
-	inputs[fieldIdentityFile].Placeholder = "~/.ssh/id_rsa"
-	inputs[fieldIdentityFile].SetValue("default")
+	inputs[fieldIdentityFile].Placeholder = "(default)"
 	inputs[fieldIdentityFile].CharLimit = 255
 	inputs[fieldIdentityFile].Width = 40
 
