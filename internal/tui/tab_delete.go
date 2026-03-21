@@ -47,7 +47,7 @@ func newDeleteModel(conns []connectionItem, database *sql.DB, width, height int)
 
 	return DeleteModel{
 		list:      l,
-		filterBox: NewFilterBox(width - 2, warnRed),
+		filterBox: NewFilterBox(width, warnRed),
 		allItems:  items,
 		database:  database,
 		width:     width,
@@ -195,15 +195,14 @@ func (m DeleteModel) View() string {
 	if m.statusMsg != "" {
 		lines := strings.Split(listView, "\n")
 		last := lines[len(lines)-1]
-		lineWidth := m.width - 2 // content box padding eats 2 extra chars
-		avail := lineWidth - lipgloss.Width(last) - 2
+		avail := m.width - lipgloss.Width(last) - 2
 		if avail > 0 {
 			msg := m.statusMsg
 			if len(msg) > avail {
 				msg = msg[:avail-1] + "…"
 			}
 			styled := m.statusStyle.Render(msg)
-			pad := lineWidth - lipgloss.Width(last) - lipgloss.Width(styled)
+			pad := m.width - lipgloss.Width(last) - lipgloss.Width(styled)
 			if pad < 1 {
 				pad = 1
 			}
@@ -218,7 +217,7 @@ func (m DeleteModel) View() string {
 func (m *DeleteModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.filterBox.SetWidth(w - 2)
+	m.filterBox.SetWidth(w)
 	m.list.SetSize(w, h-4)
 }
 

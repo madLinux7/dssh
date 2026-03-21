@@ -39,7 +39,7 @@ func newConnectModel(conns []model.Connection, width, height int) ConnectModel {
 
 	return ConnectModel{
 		list:      l,
-		filterBox: NewFilterBox(width - 2, magenta),
+		filterBox: NewFilterBox(width, magenta),
 		allItems:  items,
 		width:     width,
 		height:    height,
@@ -119,7 +119,7 @@ func (m ConnectModel) View() string {
 func (m *ConnectModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.filterBox.SetWidth(w - 2)
+	m.filterBox.SetWidth(w)
 	m.list.SetSize(w, h-4)
 }
 

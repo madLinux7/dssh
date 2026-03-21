@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 const (
@@ -66,7 +65,7 @@ func newNewModel(width, height int) NewModel {
 	inputs[fieldPassword] = textinput.New()
 	inputs[fieldPassword].Placeholder = "password"
 	inputs[fieldPassword].EchoMode = textinput.EchoPassword
-	inputs[fieldPassword].EchoCharacter = '*'
+	inputs[fieldPassword].EchoCharacter = '•'
 	inputs[fieldPassword].CharLimit = 128
 	inputs[fieldPassword].Width = 30
 
@@ -224,8 +223,6 @@ func (m NewModel) updateFocus() NewModel {
 	return m
 }
 
-var formStyle = lipgloss.NewStyle()
-
 func (m NewModel) View() string {
 	var b strings.Builder
 
@@ -253,7 +250,7 @@ func (m NewModel) View() string {
 	b.WriteString("\n\n")
 	b.WriteString(statusStyle.Render("esc: cancel  |  up/down: navigate  |  ctrl+t: toggle auth  |  enter: next/save"))
 
-	return formStyle.Render(b.String())
+	return b.String()
 }
 
 func (m *NewModel) SetSize(w, h int) {

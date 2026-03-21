@@ -94,8 +94,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		contentWidth := m.width - 6    // border(2) + padding(4)
-		subModelHeight := m.height - 7 // content area minus 1 for status line
+		// Content box: Width(w-4) includes padding (2×2), text area = w-4-4 = w-8.
+		contentWidth := m.width - 8
+		// Title(3) + filter(3) + gap(1) + status(1) = 8 lines of overhead.
+		subModelHeight := m.height - 8
 		if subModelHeight < 1 {
 			subModelHeight = 1
 		}
