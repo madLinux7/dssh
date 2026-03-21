@@ -29,7 +29,7 @@ var (
 	contentStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(purple).
-			Padding(1, 2)
+			Padding(0, 2)
 
 	focusedFieldStyle = lipgloss.NewStyle().
 				Foreground(magenta).
@@ -76,4 +76,10 @@ var (
 	modalErrorStyle = lipgloss.NewStyle().
 			Foreground(warnRed).
 			Bold(true)
+
+	filterBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(dimGray).
+			Padding(0, 1).
+			Height(1)
 )

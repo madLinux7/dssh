@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/madLinux7/dssh/internal/model"
 )
 
@@ -21,9 +22,11 @@ func (i connectionItem) FilterValue() string { return i.conn.Name }
 
 // ConnectModel is the Bubble Tea model for the Connect tab.
 type ConnectModel struct {
-	list   list.Model
-	width  int
-	height int
+	list      list.Model
+	filterBox FilterBox
+	allItems  []list.Item
+	width     int
+	height    int
 }
 
 func newConnectModel(conns []model.Connection, width, height int) ConnectModel {
@@ -43,61 +46,104 @@ func newConnectModel(conns []model.Connection, width, height int) ConnectModel {
 	delegate.SetHeight(1)
 	delegate.SetSpacing(0)
 
-	l := list.New(items, delegate, width, height)
-	l.Title = "Select Connection"
+	l := list.New(items, delegate, width, height-4)
+	l.SetShowTitle(false)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(true)
-	l.Styles.Title = titleStyle
+	l.SetFilteringEnabled(false)
 
-	return ConnectModel{list: l, width: width, height: height}
+	return ConnectModel{
+		list:      l,
+		filterBox: NewFilterBox(width - 2),
+		allItems:  items,
+		width:     width,
+		height:    height,
+	}
 }
 
 func (m ConnectModel) Update(msg tea.Msg) (ConnectModel, *AppResult, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if m.list.FilterState() == list.Filtering {
-			break
-		}
 		switch msg.String() {
 		case "enter":
 			if item, ok := m.list.SelectedItem().(connectionItem); ok {
 				conn := item.conn
 				return m, &AppResult{Action: ActionConnect, Connection: &conn}, nil
 			}
-		case "q", "esc":
+			return m, nil, nil
+		case "esc":
+			if m.filterBox.Value() != "" {
+				m.filterBox.SetValue("")
+				m.applyFilter()
+				return m, nil, nil
+			}
+			return m, &AppResult{Action: ActionNone}, nil
+		case "up", "down", "pgup", "pgdown":
+			var cmd tea.Cmd
+			m.list, cmd = m.list.Update(msg)
+			return m, nil, cmd
+		}
+
+		// "q" quits only when filter is empty.
+		if msg.String() == "q" && m.filterBox.Value() == "" {
 			return m, &AppResult{Action: ActionNone}, nil
 		}
+
+		// All other keys go to the filter.
+		prevVal := m.filterBox.Value()
+		var cmd tea.Cmd
+		m.filterBox, cmd = m.filterBox.Update(msg)
+		if m.filterBox.Value() != prevVal {
+			m.applyFilter()
+		}
+		return m, nil, cmd
 	}
 
+	// Non-key messages (cursor blink, etc.) go to both sub-models.
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return m, nil, cmd
+	var filterCmd tea.Cmd
+	m.filterBox, filterCmd = m.filterBox.Update(msg)
+	return m, nil, tea.Batch(cmd, filterCmd)
+}
+
+// applyFilter updates the list to show only items matching the current filter text.
+func (m *ConnectModel) applyFilter() {
+	query := strings.ToLower(m.filterBox.Value())
+	if query == "" {
+		m.list.SetItems(m.allItems)
+		return
+	}
+	var filtered []list.Item
+	for _, item := range m.allItems {
+		if ci, ok := item.(connectionItem); ok {
+			label := strings.ToLower(ci.conn.DisplayLabel())
+			if strings.Contains(label, query) {
+				filtered = append(filtered, item)
+			}
+		}
+	}
+	m.list.SetItems(filtered)
 }
 
 func (m ConnectModel) View() string {
-	return m.list.View()
+	title := titleStyle.Render("Select Connection")
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", m.list.View())
 }
 
 func (m *ConnectModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.list.SetSize(w, h)
+	m.filterBox.SetWidth(w - 2)
+	m.list.SetSize(w, h-4)
 }
 
 // AddItem inserts a connection in descending alphabetical position.
 func (m *ConnectModel) AddItem(conn model.Connection) {
-	insertItemSorted(&m.list, conn)
-}
-
-// insertItemSorted inserts a connectionItem into a bubbles/list in
-// descending alphabetical order (Z→A) by connection name.
-// Used by both ConnectModel and DeleteModel to keep lists sorted after adds.
-func insertItemSorted(l *list.Model, conn model.Connection) {
-	items := l.Items()
+	newItem := list.Item(connectionItem{conn: conn})
 	newName := strings.ToLower(conn.Name)
-	pos := len(items)
-	for i, item := range items {
+	pos := len(m.allItems)
+	for i, item := range m.allItems {
 		if ci, ok := item.(connectionItem); ok {
 			if newName > strings.ToLower(ci.conn.Name) {
 				pos = i
@@ -105,15 +151,19 @@ func insertItemSorted(l *list.Model, conn model.Connection) {
 			}
 		}
 	}
-	l.InsertItem(pos, connectionItem{conn: conn})
+	m.allItems = append(m.allItems, nil)
+	copy(m.allItems[pos+1:], m.allItems[pos:])
+	m.allItems[pos] = newItem
+	m.applyFilter()
 }
 
 // RemoveByName removes the first item matching the given connection name.
 func (m *ConnectModel) RemoveByName(name string) {
-	for i, item := range m.list.Items() {
+	for i, item := range m.allItems {
 		if ci, ok := item.(connectionItem); ok && ci.conn.Name == name {
-			m.list.RemoveItem(i)
-			return
+			m.allItems = append(m.allItems[:i], m.allItems[i+1:]...)
+			break
 		}
 	}
+	m.applyFilter()
 }

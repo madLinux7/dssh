@@ -427,7 +427,7 @@ func (m AppModel) View() string {
 	}
 
 	// Inner content area height (inside border + padding).
-	contentHeight := m.height - 6
+	contentHeight := m.height - 4
 	if contentHeight < 2 {
 		contentHeight = 2
 	}
