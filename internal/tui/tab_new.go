@@ -42,6 +42,7 @@ func newNewModel(width, height int) NewModel {
 
 	inputs[fieldUser] = textinput.New()
 	inputs[fieldUser].Placeholder = "root"
+	inputs[fieldUser].SetValue("root")
 	inputs[fieldUser].CharLimit = 64
 	inputs[fieldUser].Width = 30
 
@@ -223,7 +224,7 @@ func (m NewModel) updateFocus() NewModel {
 	return m
 }
 
-var formStyle = lipgloss.NewStyle().PaddingLeft(2)
+var formStyle = lipgloss.NewStyle()
 
 func (m NewModel) View() string {
 	var b strings.Builder

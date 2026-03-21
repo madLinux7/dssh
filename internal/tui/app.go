@@ -397,18 +397,56 @@ func (m AppModel) verifyPassphraseTUI(passphrase string, salt []byte) error {
 }
 
 func (m AppModel) View() string {
-	// Tab bar.
-	var tabBar strings.Builder
+	// Accent color — red for Delete tab, purple otherwise.
+	accentColor := purple
+	if m.activeTab == TabDelete {
+		accentColor = warnRed
+	}
+
+	// Tab bar — render each tab and split into top/bottom lines.
+	var tabTopParts, tabBotParts []string
+	var tabWidths []int
 	for i, tab := range m.tabs {
+		style := inactiveTabStyle.BorderForeground(accentColor)
 		if Tab(i) == m.activeTab {
-			tabBar.WriteString(activeTabStyle.Render(tab))
-		} else {
-			tabBar.WriteString(inactiveTabStyle.Render(tab))
+			style = activeTabStyle.BorderForeground(accentColor)
 		}
-		if i < len(m.tabs)-1 {
-			tabBar.WriteString(tabGapStyle.Render(" | "))
+		rendered := style.Render(tab)
+		lines := strings.Split(rendered, "\n")
+		tabTopParts = append(tabTopParts, lines[0])
+		tabBotParts = append(tabBotParts, lines[1])
+		tabWidths = append(tabWidths, lipgloss.Width(lines[0]))
+	}
+	tabBar := strings.Join(tabTopParts, " ") + "\n" + strings.Join(tabBotParts, " ")
+
+	// Connecting line: merges tab bottoms with content box top border.
+	contentBoxWidth := m.width - 2 // content inner width + left/right borders
+	var conn strings.Builder
+	pos := 0
+	for i, w := range tabWidths {
+		if pos == 0 {
+			conn.WriteRune('│')
+		} else {
+			conn.WriteRune('╯')
+		}
+		pos++
+		for j := 0; j < w-2; j++ {
+			conn.WriteRune(' ')
+		}
+		pos += w - 2
+		conn.WriteRune('╰')
+		pos++
+		if i < len(tabWidths)-1 {
+			conn.WriteRune('─') // gap between tabs
+			pos++
 		}
 	}
+	for pos < contentBoxWidth-1 {
+		conn.WriteRune('─')
+		pos++
+	}
+	conn.WriteRune('╮')
+	connLine := lipgloss.NewStyle().Foreground(accentColor).Render(conn.String())
 
 	// If modal is active, render it as full-screen overlay.
 	if m.showModal {
@@ -445,13 +483,14 @@ func (m AppModel) View() string {
 	}
 
 	contentBox := contentStyle.
+		BorderForeground(accentColor).
 		Width(m.width - 4).
 		Height(contentHeight).
 		Render(content)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		"",
-		tabBar.String(),
+		tabBar,
+		connLine,
 		contentBox,
 	)
 }

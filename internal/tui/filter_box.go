@@ -14,14 +14,16 @@ type FilterBox struct {
 	width int // outer width of the box
 }
 
-func NewFilterBox(width int) FilterBox {
+func NewFilterBox(width int, promptColor lipgloss.Color) FilterBox {
 	input := textinput.New()
 	input.Placeholder = "type to search..."
 	input.Prompt = "/ "
 	input.CharLimit = 64
 	input.Width = filterInputWidth(width)
 	input.Focus()
-	input.PromptStyle = focusedFieldStyle
+	input.PromptStyle = lipgloss.NewStyle().
+						Foreground(promptColor).
+						Bold(true)
 
 	return FilterBox{input: input, width: width}
 }

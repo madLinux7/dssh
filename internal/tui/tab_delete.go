@@ -43,26 +43,11 @@ func newDeleteModel(conns []connectionItem, database *sql.DB, width, height int)
 		items[i] = c
 	}
 
-	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(warnRed).
-		BorderLeftForeground(warnRed)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(dimGray).
-		BorderLeftForeground(warnRed)
-	delegate.ShowDescription = false
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
-
-	l := list.New(items, delegate, width, height-4)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
+	l := newConnectionList(items, warnRed, width, height)
 
 	return DeleteModel{
 		list:      l,
-		filterBox: NewFilterBox(width - 2),
+		filterBox: NewFilterBox(width - 2, warnRed),
 		allItems:  items,
 		database:  database,
 		width:     width,
@@ -108,7 +93,7 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 				m.confirmCount = 1
 				m.confirmGeneration++
 				gen := m.confirmGeneration
-				m.statusMsg = fmt.Sprintf("  Press Enter 2 more times to delete %q", item.conn.Name)
+				m.statusMsg = fmt.Sprintf("Press Enter 2 more times to delete %q", item.conn.Name)
 				m.statusStyle = lipgloss.NewStyle().Foreground(warnYellow).Bold(true)
 				return m, nil, tea.Tick(time.Second, func(time.Time) tea.Msg {
 					return confirmExpiredMsg{generation: gen}
@@ -119,11 +104,11 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 			if m.confirmCount >= 3 {
 				// Confirmed — delete.
 				if err := db.Delete(m.database, item.conn.Name); err != nil {
-					m.statusMsg = fmt.Sprintf("  Error: %s", err)
+					m.statusMsg = fmt.Sprintf("Error: %s", err)
 					m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 				} else {
 					m.lastDeleted = item.conn.Name
-					m.statusMsg = fmt.Sprintf("  Deleted %q", item.conn.Name)
+					m.statusMsg = fmt.Sprintf("Deleted %q", item.conn.Name)
 					m.statusStyle = successStyle
 					m.list.RemoveItem(m.list.Index())
 					for i, ai := range m.allItems {
@@ -139,11 +124,8 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 				return m, nil, nil
 			}
 
-			remaining := 3 - m.confirmCount
-			m.statusMsg = fmt.Sprintf("  Press Enter %d more time(s) to delete %q", remaining, item.conn.Name)
-			if m.confirmCount == 2 {
-				m.statusStyle = lipgloss.NewStyle().Foreground(warnOrange).Bold(true)
-			}
+			m.statusMsg = fmt.Sprintf("Press Enter 1 more time to delete %q", item.conn.Name)
+			m.statusStyle = lipgloss.NewStyle().Foreground(warnOrange).Bold(true)
 			return m, nil, nil
 
 		case "up", "down", "pgup", "pgdown":
@@ -207,12 +189,30 @@ func (m *DeleteModel) applyFilter() {
 }
 
 func (m DeleteModel) View() string {
-	title := titleStyle.Render("Delete Connection")
-	s := lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", m.list.View())
+	title := titleStyle.Foreground(warnRed).Render("Delete Connection")
+	listView := m.list.View()
+
 	if m.statusMsg != "" {
-		s += "\n" + m.statusStyle.Render(m.statusMsg)
+		lines := strings.Split(listView, "\n")
+		last := lines[len(lines)-1]
+		lineWidth := m.width - 2 // content box padding eats 2 extra chars
+		avail := lineWidth - lipgloss.Width(last) - 2
+		if avail > 0 {
+			msg := m.statusMsg
+			if len(msg) > avail {
+				msg = msg[:avail-1] + "…"
+			}
+			styled := m.statusStyle.Render(msg)
+			pad := lineWidth - lipgloss.Width(last) - lipgloss.Width(styled)
+			if pad < 1 {
+				pad = 1
+			}
+			lines[len(lines)-1] = last + strings.Repeat(" ", pad) + styled
+		}
+		listView = strings.Join(lines, "\n")
 	}
-	return s
+
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", listView)
 }
 
 func (m *DeleteModel) SetSize(w, h int) {

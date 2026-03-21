@@ -35,26 +35,11 @@ func newConnectModel(conns []model.Connection, width, height int) ConnectModel {
 		items[i] = connectionItem{conn: c}
 	}
 
-	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(magenta).
-		BorderLeftForeground(magenta)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(dimGray).
-		BorderLeftForeground(magenta)
-	delegate.ShowDescription = false
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
-
-	l := list.New(items, delegate, width, height-4)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
+	l := newConnectionList(items, magenta, width, height)
 
 	return ConnectModel{
 		list:      l,
-		filterBox: NewFilterBox(width - 2),
+		filterBox: NewFilterBox(width - 2, magenta),
 		allItems:  items,
 		width:     width,
 		height:    height,
