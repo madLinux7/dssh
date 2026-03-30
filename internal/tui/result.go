@@ -9,6 +9,7 @@ const (
 	ActionNone    ActionKind = iota // user quit without action
 	ActionConnect                   // user selected a connection
 	ActionCreated                   // user submitted the new connection form
+	ActionEdited                    // user submitted the edit form (password changed, needs modal)
 )
 
 // WizardResult holds data collected from the new-connection form.

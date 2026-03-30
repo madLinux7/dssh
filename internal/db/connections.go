@@ -76,6 +76,33 @@ func List(db *sql.DB) ([]model.Connection, error) {
 	return conns, rows.Err()
 }
 
+// Update modifies an existing connection identified by ID.
+func Update(db *sql.DB, c *model.Connection) error {
+	encPass := c.EncryptedPass
+	if encPass == nil {
+		encPass = []byte{}
+	}
+	nonce := c.PassNonce
+	if nonce == nil {
+		nonce = []byte{}
+	}
+	_, err := db.Exec(`
+		UPDATE connections
+		SET name=?, user=?, host=?, port=?, directory=?, auth_type=?,
+		    identity_file=?, encrypted_pass=?, pass_nonce=?, updated_at=datetime('now')
+		WHERE id=?`,
+		c.Name, c.User, c.Host, c.Port, c.Directory, string(c.AuthType),
+		c.IdentityFile, encPass, nonce, c.ID,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return fmt.Errorf("%w: %q", ErrDuplicateName, c.Name)
+		}
+		return fmt.Errorf("update connection: %w", err)
+	}
+	return nil
+}
+
 // Delete removes a connection by name.
 func Delete(db *sql.DB, name string) error {
 	res, err := db.Exec("DELETE FROM connections WHERE name = ?", name)

@@ -226,3 +226,14 @@ func (m *DeleteModel) AddItem(conn model.Connection) {
 	m.allItems = insertItemSorted(m.allItems, conn)
 	m.applyFilter()
 }
+
+// RemoveByName removes the first item matching the given connection name.
+func (m *DeleteModel) RemoveByName(name string) {
+	for i, item := range m.allItems {
+		if ci, ok := item.(connectionItem); ok && ci.conn.Name == name {
+			m.allItems = append(m.allItems[:i], m.allItems[i+1:]...)
+			break
+		}
+	}
+	m.applyFilter()
+}

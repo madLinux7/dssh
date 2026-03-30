@@ -29,6 +29,7 @@ type Tab int
 const (
 	TabNew Tab = iota
 	TabConnect
+	TabEdit
 	TabDelete
 )
 
@@ -38,6 +39,7 @@ type AppModel struct {
 	tabs           []string
 	connectModel   ConnectModel
 	newModel       NewModel
+	editModel      EditModel
 	deleteModel    DeleteModel
 	database       *sql.DB
 	result         *AppResult
@@ -50,6 +52,7 @@ type AppModel struct {
 	showModal     bool
 	modal         PassphraseModal
 	pendingWizard *WizardResult
+	pendingEditID int64 // non-zero when edit password save is pending
 }
 
 // Run launches the TUI and returns the user's action.
@@ -66,9 +69,10 @@ func Run(connections []model.Connection, d *sql.DB, initialTab Tab) *AppResult {
 
 	m := AppModel{
 		activeTab:    initialTab,
-		tabs:         []string{"New", "Connect", "Delete"},
+		tabs:         []string{"New", "Connect", "Edit", "Delete"},
 		connectModel: newConnectModel(connections, 80, 20),
 		newModel:     newNewModel(80, 20),
+		editModel:    newEditModel(connItems, d, 80, 20),
 		deleteModel:  newDeleteModel(connItems, d, 80, 20),
 		database:     d,
 	}
@@ -106,6 +110,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.connectModel.SetSize(contentWidth, subModelHeight)
 		m.newModel.SetSize(contentWidth, subModelHeight)
+		m.editModel.SetSize(contentWidth, subModelHeight)
 		m.deleteModel.SetSize(contentWidth, subModelHeight)
 		return m, nil
 
@@ -119,11 +124,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if result.Cancelled {
 					m.showModal = false
 					m.pendingWizard = nil
+					if m.pendingEditID != 0 {
+						m.editModel.editing = false
+						m.pendingEditID = 0
+					}
 					return m, nil
 				}
 				// Passphrase entered — finalize the save.
 				m.showModal = false
-				m = m.finalizePasswordSave(result.Passphrase)
+				if m.pendingEditID != 0 {
+					m = m.finalizeEditPasswordSave(result.Passphrase)
+				} else {
+					m = m.finalizePasswordSave(result.Passphrase)
+				}
 				return m, nil
 			}
 			return m, cmd
@@ -134,27 +147,37 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.result = &AppResult{Action: ActionNone}
 			return m, tea.Quit
 		case "tab":
-			m.activeTab = Tab((int(m.activeTab) + 1) % len(m.tabs))
-			m.statusMsg = ""
-			return m, nil
+			if !m.editModel.editing {
+				m.activeTab = Tab((int(m.activeTab) + 1) % len(m.tabs))
+				m.statusMsg = ""
+				return m, nil
+			}
 		case "shift+tab":
-			m.activeTab = Tab((int(m.activeTab) - 1 + len(m.tabs)) % len(m.tabs))
-			m.statusMsg = ""
-			return m, nil
+			if !m.editModel.editing {
+				m.activeTab = Tab((int(m.activeTab) - 1 + len(m.tabs)) % len(m.tabs))
+				m.statusMsg = ""
+				return m, nil
+			}
 		case "1":
-			if m.activeTab != TabNew {
+			if m.activeTab != TabNew && !m.editModel.editing {
 				m.activeTab = TabNew
 				m.statusMsg = ""
 				return m, nil
 			}
 		case "2":
-			if m.activeTab != TabNew {
+			if m.activeTab != TabNew && !m.editModel.editing {
 				m.activeTab = TabConnect
 				m.statusMsg = ""
 				return m, nil
 			}
 		case "3":
-			if m.activeTab != TabNew {
+			if m.activeTab != TabNew && !m.editModel.editing {
+				m.activeTab = TabEdit
+				m.statusMsg = ""
+				return m, nil
+			}
+		case "4":
+			if m.activeTab != TabNew && !m.editModel.editing {
 				m.activeTab = TabDelete
 				m.statusMsg = ""
 				return m, nil
@@ -188,11 +211,29 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	case TabEdit:
+		var result *AppResult
+		m.editModel, result, cmd = m.editModel.Update(msg)
+		if m.editModel.lastEdited != nil {
+			info := m.editModel.lastEdited
+			m.editModel.lastEdited = nil
+			m.onConnectionEdited(info.oldName, info.newName)
+		}
+		if result != nil {
+			switch result.Action {
+			case ActionNone:
+				m.result = result
+				return m, tea.Quit
+			case ActionEdited:
+				m = m.handleEditPasswordSave(result)
+			}
+		}
 	case TabDelete:
 		var result *AppResult
 		m.deleteModel, result, cmd = m.deleteModel.Update(msg)
 		if m.deleteModel.lastDeleted != "" {
 			m.connectModel.RemoveByName(m.deleteModel.lastDeleted)
+			m.editModel.RemoveByName(m.deleteModel.lastDeleted)
 			m.deleteModel.lastDeleted = ""
 		}
 		if result != nil {
@@ -273,6 +314,7 @@ func (m *AppModel) onConnectionSaved(name string) {
 	saved, _ := db.GetByName(m.database, name)
 	if saved != nil {
 		m.connectModel.AddItem(*saved)
+		m.editModel.AddItem(*saved)
 		m.deleteModel.AddItem(*saved)
 	}
 	m.statusMsg = fmt.Sprintf("%q added", name)
@@ -470,6 +512,8 @@ func (m AppModel) View() string {
 		content = m.connectModel.View()
 	case TabNew:
 		content = m.newModel.View()
+	case TabEdit:
+		content = m.editModel.View()
 	case TabDelete:
 		content = m.deleteModel.View()
 	}
@@ -503,6 +547,115 @@ func (m AppModel) View() string {
 		connLine,
 		contentBox,
 	)
+}
+
+// onConnectionEdited syncs all tab lists after an edit.
+func (m *AppModel) onConnectionEdited(oldName, newName string) {
+	m.connectModel.RemoveByName(oldName)
+	m.editModel.RemoveByName(oldName)
+	m.deleteModel.RemoveByName(oldName)
+
+	saved, _ := db.GetByName(m.database, newName)
+	if saved != nil {
+		m.connectModel.AddItem(*saved)
+		m.editModel.AddItem(*saved)
+		m.deleteModel.AddItem(*saved)
+	}
+}
+
+// handleEditPasswordSave starts the passphrase modal flow for an edited connection
+// that has a new password.
+func (m AppModel) handleEditPasswordSave(result *AppResult) AppModel {
+	wr := result.WizardResult
+
+	salt, err := db.GetSetting(m.database, "argon2_salt")
+	if err != nil {
+		m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
+		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.editModel.editing = false
+		return m
+	}
+	isNew := salt == nil
+	m.modal = newPassphraseModal(isNew, m.width, m.height)
+	m.showModal = true
+	m.pendingWizard = wr
+	m.pendingEditID = result.Connection.ID
+	return m
+}
+
+// finalizeEditPasswordSave encrypts the new password and updates the connection.
+func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
+	wr := m.pendingWizard
+	if wr == nil {
+		m.editModel.statusMsg = "Error: no pending edit"
+		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		return m
+	}
+
+	port, _ := strconv.Atoi(wr.Port)
+
+	salt, isNew, err := m.ensureSalt(passphrase)
+	if err != nil {
+		m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
+		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.editModel.editing = false
+		m.pendingWizard = nil
+		m.pendingEditID = 0
+		return m
+	}
+
+	if !isNew {
+		if err := m.verifyPassphraseTUI(passphrase, salt); err != nil {
+			m.modal = newPassphraseModal(false, m.width, m.height)
+			m.modal.errMsg = err.Error()
+			m.showModal = true
+			return m
+		}
+	}
+
+	key := crypto.DeriveKey(passphrase, salt)
+
+	conn := &model.Connection{
+		ID:        m.pendingEditID,
+		Name:      wr.Name,
+		User:      wr.User,
+		Host:      wr.Host,
+		Port:      port,
+		Directory: wr.Directory,
+		AuthType:  model.AuthPassword,
+	}
+
+	if wr.Password != "" {
+		ciphertext, nonce, err := crypto.Encrypt(key, []byte(wr.Password))
+		if err != nil {
+			m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
+			m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+			m.editModel.editing = false
+			m.pendingWizard = nil
+			m.pendingEditID = 0
+			return m
+		}
+		conn.EncryptedPass = ciphertext
+		conn.PassNonce = nonce
+	}
+
+	oldName := m.editModel.origConn.Name
+	if err := db.Update(m.database, conn); err != nil {
+		m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
+		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.editModel.editing = false
+		m.pendingWizard = nil
+		m.pendingEditID = 0
+		return m
+	}
+
+	m.editModel.editing = false
+	m.editModel.statusMsg = fmt.Sprintf("%q updated", wr.Name)
+	m.editModel.statusStyle = successStyle
+	m.pendingWizard = nil
+	m.pendingEditID = 0
+	m.onConnectionEdited(oldName, wr.Name)
+	return m
 }
 
 // setError sets the status bar to an error message.
