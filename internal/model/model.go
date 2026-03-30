@@ -17,6 +17,7 @@ type Connection struct {
 	User          string
 	Host          string
 	Port          int
+	Directory     string
 	AuthType      AuthType
 	IdentityFile  string
 	EncryptedPass []byte

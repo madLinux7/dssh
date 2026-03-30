@@ -55,11 +55,12 @@ func savePasswordAuth(d *sql.DB, wr *tui.WizardResult) error {
 	port, _ := strconv.Atoi(wr.Port) // already validated by TUI
 
 	conn := &model.Connection{
-		Name:     wr.Name,
-		User:     wr.User,
-		Host:     wr.Host,
-		Port:     port,
-		AuthType: model.AuthPassword,
+		Name:      wr.Name,
+		User:      wr.User,
+		Host:      wr.Host,
+		Port:      port,
+		Directory: wr.Directory,
+		AuthType:  model.AuthPassword,
 	}
 
 	if wr.Password != "" {

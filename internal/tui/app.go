@@ -247,11 +247,12 @@ func (m AppModel) handleSave(wr *WizardResult) (AppModel, tea.Cmd) {
 
 	// Key auth — save directly in TUI.
 	conn := &model.Connection{
-		Name:     wr.Name,
-		User:     wr.User,
-		Host:     wr.Host,
-		Port:     port,
-		AuthType: model.AuthKey,
+		Name:      wr.Name,
+		User:      wr.User,
+		Host:      wr.Host,
+		Port:      port,
+		Directory: wr.Directory,
+		AuthType:  model.AuthKey,
 	}
 	if wr.IdentityFile != "default" {
 		conn.IdentityFile = expandTildeTUI(wr.IdentityFile)
@@ -313,11 +314,12 @@ func (m AppModel) finalizePasswordSave(passphrase string) AppModel {
 	key := crypto.DeriveKey(passphrase, salt)
 
 	conn := &model.Connection{
-		Name:     wr.Name,
-		User:     wr.User,
-		Host:     wr.Host,
-		Port:     port,
-		AuthType: model.AuthPassword,
+		Name:      wr.Name,
+		User:      wr.User,
+		Host:      wr.Host,
+		Port:      port,
+		Directory: wr.Directory,
+		AuthType:  model.AuthPassword,
 	}
 
 	if wr.Password != "" {

@@ -26,9 +26,9 @@ func Insert(db *sql.DB, c *model.Connection) error {
 		nonce = []byte{}
 	}
 	_, err := db.Exec(`
-		INSERT INTO connections (name, user, host, port, auth_type, identity_file, encrypted_pass, pass_nonce)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.User, c.Host, c.Port, string(c.AuthType), c.IdentityFile, encPass, nonce,
+		INSERT INTO connections (name, user, host, port, directory, auth_type, identity_file, encrypted_pass, pass_nonce)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.User, c.Host, c.Port, c.Directory, string(c.AuthType), c.IdentityFile, encPass, nonce,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -43,9 +43,9 @@ func Insert(db *sql.DB, c *model.Connection) error {
 func GetByName(db *sql.DB, name string) (*model.Connection, error) {
 	c := &model.Connection{}
 	err := db.QueryRow(`
-		SELECT id, name, user, host, port, auth_type, identity_file, encrypted_pass, pass_nonce, created_at, updated_at
+		SELECT id, name, user, host, port, directory, auth_type, identity_file, encrypted_pass, pass_nonce, created_at, updated_at
 		FROM connections WHERE name = ?`, name,
-	).Scan(&c.ID, &c.Name, &c.User, &c.Host, &c.Port, &c.AuthType, &c.IdentityFile, &c.EncryptedPass, &c.PassNonce, &c.CreatedAt, &c.UpdatedAt)
+	).Scan(&c.ID, &c.Name, &c.User, &c.Host, &c.Port, &c.Directory, &c.AuthType, &c.IdentityFile, &c.EncryptedPass, &c.PassNonce, &c.CreatedAt, &c.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("%w: %q", ErrNotFound, name)
 	}
@@ -58,7 +58,7 @@ func GetByName(db *sql.DB, name string) (*model.Connection, error) {
 // List returns all connections ordered by name.
 func List(db *sql.DB) ([]model.Connection, error) {
 	rows, err := db.Query(`
-		SELECT id, name, user, host, port, auth_type, identity_file, encrypted_pass, pass_nonce, created_at, updated_at
+		SELECT id, name, user, host, port, directory, auth_type, identity_file, encrypted_pass, pass_nonce, created_at, updated_at
 		FROM connections ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list connections: %w", err)
@@ -68,7 +68,7 @@ func List(db *sql.DB) ([]model.Connection, error) {
 	var conns []model.Connection
 	for rows.Next() {
 		var c model.Connection
-		if err := rows.Scan(&c.ID, &c.Name, &c.User, &c.Host, &c.Port, &c.AuthType, &c.IdentityFile, &c.EncryptedPass, &c.PassNonce, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.User, &c.Host, &c.Port, &c.Directory, &c.AuthType, &c.IdentityFile, &c.EncryptedPass, &c.PassNonce, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan connection: %w", err)
 		}
 		conns = append(conns, c)

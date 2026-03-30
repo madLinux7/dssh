@@ -17,6 +17,7 @@ type WizardResult struct {
 	User         string
 	Host         string
 	Port         string
+	Directory    string
 	AuthType     string // "key" or "password"
 	IdentityFile string
 	Password     string

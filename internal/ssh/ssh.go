@@ -77,6 +77,10 @@ func ConnectWithPassword(conn *model.Connection, password string, extraArgs []st
 func buildArgs(conn *model.Connection, extraArgs []string) []string {
 	args := []string{"ssh"}
 
+	if conn.Directory != "" {
+		args = append(args, "-t")
+	}
+
 	if conn.Port != 22 {
 		args = append(args, "-p", strconv.Itoa(conn.Port))
 	}
@@ -92,6 +96,12 @@ func buildArgs(conn *model.Connection, extraArgs []string) []string {
 
 	args = append(args, extraArgs...)
 	args = append(args, conn.SSHTarget())
+
+	if conn.Directory != "" {
+		remoteCmd := fmt.Sprintf("cd '%s' && exec $SHELL -l",
+			escapeShellSingleQuote(conn.Directory))
+		args = append(args, remoteCmd)
+	}
 
 	return args
 }

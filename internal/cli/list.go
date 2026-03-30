@@ -33,9 +33,13 @@ func newListCmd() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH")
+			fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR")
 			for _, c := range conns {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType)
+				dir := c.Directory
+				if dir == "" {
+					dir = "-"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir)
 			}
 			return w.Flush()
 		},

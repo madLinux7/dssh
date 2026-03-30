@@ -7,11 +7,11 @@
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
-Dead-simple, cross-platform CLI tool to manage all your SSH connections. 
+The only SSH connection management tool you'll ever need. Dead-simple and cross-platform for every CLI.
 
-Three simple core features: **Connect, New, Delete**.
+Three core features: **Create, Connect, Delete**.
 
-Passwords are encrypted using a passphrase.
+Passwords are encrypted using a passphrase (_you should consider using pubkeys only tho ;))_.
 
 <!-- TODO: Replace with VHS recording of `dssh` picker + connect flow -->
 ![dssh demo](assets/demo.gif)
@@ -21,10 +21,11 @@ Passwords are encrypted using a passphrase.
 - **Instant connect** 🚀 — `dssh myserver` and you're in
 - **Fancy interactive picker** ✨ — run `dssh` with no args to connect, add and delete connections
 - **Wizard** 🪄 — create connections without memorizing flags
+- **Start in a directory** 📂 — optionally land in a specific remote directory on connect
 - **Password encryption** 🔒 — AES-256-GCM + Argon2id, protected by a master passphrase
 - **No dependencies** 🗽 — single static binary, uses your system's `ssh`
 - **Cross-platform** 💻 — Linux, macOS, Windows, FreeBSD (amd64 + arm64)
-- **Dead simple migration** 📦 — moving to a new machine? Just copy `~/.dssh/dssh.db`. That's it. Works on all platforms
+- **Dead simple migration** 📦 — moving to a new machine? Just take `~/.dssh/dssh.db` with you. That's it.
 
 ## How it works
 
@@ -102,6 +103,9 @@ dssh add myserver -p 2222 root@192.168.1.10
 # SSH URI syntax
 dssh add myserver ssh://root@192.168.1.10:2222
 
+# Start in a specific remote directory
+dssh add myserver -d /var/www root@192.168.1.10
+
 # With password (will prompt for master passphrase)
 dssh add myserver root@192.168.1.10 'my-ssh-password'
 ```
@@ -141,9 +145,9 @@ dssh ls # alias
 ```
 
 ```
-NAME       USER   HOST           PORT  AUTH
-myserver   root   192.168.1.10   22    key
-webbox     deploy web.host       8022  key
+NAME       USER   HOST           PORT  AUTH  DIR
+myserver   root   192.168.1.10   22    key   /var/www
+webbox     deploy web.host       8022  key   -
 ```
 
 ### Remove a connection
@@ -185,7 +189,7 @@ All data lives in `~/.dssh/dssh.db` (SQLite).
 | `dssh` | Launch interactive connection picker |
 | `dssh <name>` | Connect to a saved host by name |
 | `dssh <name> -- <args>` | Connect with extra args forwarded to ssh |
-| `dssh add [-p PORT] <name> <target> [password]` | Save a new connection |
+| `dssh add [-p PORT] [-d DIR] <name> <target> [password]` | Save a new connection |
 | `dssh rm <name>` | Delete a saved connection |
 | `dssh list` / `dssh ls` | List all saved connections |
 | `dssh wizard` / `dssh new` | Interactive form to create a connection |

@@ -13,9 +13,10 @@ import (
 
 func newAddCmd() *cobra.Command {
 	var port int
+	var directory string
 
 	cmd := &cobra.Command{
-		Use:   "add [-p PORT] NAME target [password]",
+		Use:   "add [-p PORT] [-d DIR] NAME target [password]",
 		Short: "Add a new SSH connection",
 		Long: `Add a new SSH connection. Target can be user@host or ssh://user@host:port.
 If a password is provided, the connection uses password authentication
@@ -44,11 +45,12 @@ and the password is encrypted with your master passphrase.`,
 			defer d.Close()
 
 			conn := &model.Connection{
-				Name:     name,
-				User:     user,
-				Host:     host,
-				Port:     parsedPort,
-				AuthType: model.AuthKey,
+				Name:      name,
+				User:      user,
+				Host:      host,
+				Port:      parsedPort,
+				Directory: directory,
+				AuthType:  model.AuthKey,
 			}
 
 			// Optional password argument → password auth.
@@ -74,6 +76,9 @@ and the password is encrypted with your master passphrase.`,
 	}
 
 	cmd.Flags().IntVarP(&port, "port", "p", 22, "SSH port")
+	cmd.Flags().StringVarP(&directory, "directory", "d", "", "Remote directory to cd into on connect")
+	cmd.Flags().StringVar(&directory, "cd", "", "Alias for --directory")
+	cmd.Flags().MarkHidden("cd")
 	return cmd
 }
 

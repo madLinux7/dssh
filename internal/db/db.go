@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS connections (
     user            TEXT    NOT NULL,
     host            TEXT    NOT NULL,
     port            INTEGER NOT NULL DEFAULT 22,
+    directory       TEXT    NOT NULL DEFAULT '',
     auth_type       TEXT    NOT NULL DEFAULT 'key',
     identity_file   TEXT    NOT NULL DEFAULT '',
     encrypted_pass  BLOB    NOT NULL DEFAULT x'',

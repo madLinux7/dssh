@@ -13,6 +13,7 @@ const (
 	fieldUser
 	fieldHost
 	fieldPort
+	fieldDirectory
 	fieldIdentityFile
 	fieldPassword
 	fieldCount
@@ -53,6 +54,11 @@ func newNewModel(width, height int) NewModel {
 	inputs[fieldPort].Placeholder = "22"
 	inputs[fieldPort].CharLimit = 5
 	inputs[fieldPort].Width = 10
+
+	inputs[fieldDirectory] = textinput.New()
+	inputs[fieldDirectory].Placeholder = "(default)"
+	inputs[fieldDirectory].CharLimit = 255
+	inputs[fieldDirectory].Width = 40
 
 	inputs[fieldIdentityFile] = textinput.New()
 	inputs[fieldIdentityFile].Placeholder = "(default)"
@@ -183,6 +189,7 @@ func (m NewModel) Update(msg tea.Msg) (NewModel, *AppResult, tea.Cmd) {
 						User:         m.inputs[fieldUser].Value(),
 						Host:         m.inputs[fieldHost].Value(),
 						Port:         m.inputs[fieldPort].Value(),
+						Directory:    m.inputs[fieldDirectory].Value(),
 						AuthType:     m.authType,
 						IdentityFile: m.inputs[fieldIdentityFile].Value(),
 						Password:     m.inputs[fieldPassword].Value(),
@@ -226,7 +233,7 @@ func (m NewModel) View() string {
 	b.WriteString(titleStyle.Render("New Connection"))
 	b.WriteString("\n\n")
 
-	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Identity File", "Password"}
+	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password"}
 
 	for _, i := range m.visibleFields() {
 		label := labelStyle.Render(labels[i])
