@@ -378,8 +378,6 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 	oldName := m.origConn.Name
 	m.lastEdited = &editedInfo{oldName: oldName, newName: name}
 	m.editing = false
-	m.statusMsg = fmt.Sprintf("%q updated", name)
-	m.statusStyle = successStyle
 	return m, nil, nil
 }
 
@@ -410,28 +408,7 @@ func (m EditModel) View() string {
 
 func (m EditModel) viewList() string {
 	title := titleStyle.Foreground(magenta).Render("Edit Connection")
-	listView := m.list.View()
-
-	if m.statusMsg != "" {
-		lines := strings.Split(listView, "\n")
-		last := lines[len(lines)-1]
-		avail := m.width - lipgloss.Width(last) - 2
-		if avail > 0 {
-			msg := m.statusMsg
-			if len(msg) > avail {
-				msg = msg[:avail-1] + "…"
-			}
-			styled := m.statusStyle.Render(msg)
-			pad := m.width - lipgloss.Width(last) - lipgloss.Width(styled)
-			if pad < 1 {
-				pad = 1
-			}
-			lines[len(lines)-1] = last + strings.Repeat(" ", pad) + styled
-		}
-		listView = strings.Join(lines, "\n")
-	}
-
-	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", listView)
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", m.list.View())
 }
 
 func (m EditModel) viewForm() string {
@@ -456,6 +433,11 @@ func (m EditModel) viewForm() string {
 		b.WriteString(focusedFieldStyle.Render("[ Save ]"))
 	} else {
 		b.WriteString(blurredFieldStyle.Render("[ Save ]"))
+	}
+
+	if m.statusMsg != "" {
+		b.WriteString("\n\n")
+		b.WriteString(m.statusStyle.Render(m.statusMsg))
 	}
 
 	b.WriteString("\n\n")

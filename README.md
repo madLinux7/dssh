@@ -14,7 +14,7 @@ Three core features: **Create, Connect, Delete**.
 Passwords are encrypted using a passphrase (_you should consider using pubkeys only tho ;))_.
 
 <!-- TODO: Replace with VHS recording of `dssh` picker + connect flow -->
-![dssh demo](assets/demo.gif)
+![dssh demo](demo_1.gif)
 
 ## Features
 

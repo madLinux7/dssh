@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-set -euo pipefail
+#set -euo pipefail
+
+if [ -z "$1" ] || [ "$1" -eq 0 ]; then
+  echo "Number of records required"
+  exit 1
+fi
 
 DSSH="./dssh"
 
@@ -17,7 +22,7 @@ users=(root admin deploy ops sysadmin devops ci jenkins ansible terraform
        ubuntu ec2-user centos alpine docker kube prometheus grafana vault
        consul nomad)
 
-for i in $(seq 1 100); do
+for i in $(seq 1 $1); do
     adj=${adjectives[$((RANDOM % ${#adjectives[@]}))]}
     noun=${nouns[$((RANDOM % ${#nouns[@]}))]}
     name="${adj}-${noun}-$(printf '%03d' "$i")"
@@ -34,4 +39,4 @@ for i in $(seq 1 100); do
     $DSSH add -p "$port" "$name" "${user}@${host}"
 done
 
-echo "Inserted 100 mockup connections."
+echo "Inserted $1 mockup connections."

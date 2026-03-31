@@ -43,11 +43,11 @@ func newDeleteModel(conns []connectionItem, database *sql.DB, width, height int)
 		items[i] = c
 	}
 
-	l := newConnectionList(items, warnRed, width, height)
+	l := newConnectionList(items, warnOrange, width, height)
 
 	return DeleteModel{
 		list:      l,
-		filterBox: NewFilterBox(width, warnRed),
+		filterBox: NewFilterBox(width, warnOrange),
 		allItems:  items,
 		database:  database,
 		width:     width,
@@ -108,8 +108,7 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 					m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 				} else {
 					m.lastDeleted = item.conn.Name
-					m.statusMsg = fmt.Sprintf("Deleted %q", item.conn.Name)
-					m.statusStyle = successStyle
+					m.statusMsg = ""
 					m.list.RemoveItem(m.list.Index())
 					for i, ai := range m.allItems {
 						if ci, ok := ai.(connectionItem); ok && ci.conn.Name == item.conn.Name {
@@ -189,7 +188,7 @@ func (m *DeleteModel) applyFilter() {
 }
 
 func (m DeleteModel) View() string {
-	title := titleStyle.Foreground(warnRed).Render("Delete Connection")
+	title := titleStyle.Foreground(warnOrange).Render("Delete Connection")
 	listView := m.list.View()
 
 	if m.statusMsg != "" {

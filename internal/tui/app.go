@@ -158,30 +158,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMsg = ""
 				return m, nil
 			}
-		case "1":
-			if m.activeTab != TabNew && !m.editModel.editing {
-				m.activeTab = TabNew
-				m.statusMsg = ""
-				return m, nil
-			}
-		case "2":
-			if m.activeTab != TabNew && !m.editModel.editing {
-				m.activeTab = TabConnect
-				m.statusMsg = ""
-				return m, nil
-			}
-		case "3":
-			if m.activeTab != TabNew && !m.editModel.editing {
-				m.activeTab = TabEdit
-				m.statusMsg = ""
-				return m, nil
-			}
-		case "4":
-			if m.activeTab != TabNew && !m.editModel.editing {
-				m.activeTab = TabDelete
-				m.statusMsg = ""
-				return m, nil
-			}
 		}
 	}
 
@@ -218,6 +194,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			info := m.editModel.lastEdited
 			m.editModel.lastEdited = nil
 			m.onConnectionEdited(info.oldName, info.newName)
+			m.statusMsg = fmt.Sprintf("%q updated", info.newName)
+			m.statusMsgStyle = successStyle
 		}
 		if result != nil {
 			switch result.Action {
@@ -232,9 +210,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var result *AppResult
 		m.deleteModel, result, cmd = m.deleteModel.Update(msg)
 		if m.deleteModel.lastDeleted != "" {
-			m.connectModel.RemoveByName(m.deleteModel.lastDeleted)
-			m.editModel.RemoveByName(m.deleteModel.lastDeleted)
+			name := m.deleteModel.lastDeleted
+			m.connectModel.RemoveByName(name)
+			m.editModel.RemoveByName(name)
 			m.deleteModel.lastDeleted = ""
+			m.statusMsg = fmt.Sprintf("%q deleted", name)
+			m.statusMsgStyle = successStyle
 		}
 		if result != nil {
 			m.result = result
@@ -570,8 +551,7 @@ func (m AppModel) handleEditPasswordSave(result *AppResult) AppModel {
 
 	salt, err := db.GetSetting(m.database, "argon2_salt")
 	if err != nil {
-		m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("%s", err)
 		m.editModel.editing = false
 		return m
 	}
@@ -587,8 +567,7 @@ func (m AppModel) handleEditPasswordSave(result *AppResult) AppModel {
 func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
 	wr := m.pendingWizard
 	if wr == nil {
-		m.editModel.statusMsg = "Error: no pending edit"
-		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("no pending edit")
 		return m
 	}
 
@@ -596,8 +575,7 @@ func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
 
 	salt, isNew, err := m.ensureSalt(passphrase)
 	if err != nil {
-		m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("%s", err)
 		m.editModel.editing = false
 		m.pendingWizard = nil
 		m.pendingEditID = 0
@@ -628,8 +606,7 @@ func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
 	if wr.Password != "" {
 		ciphertext, nonce, err := crypto.Encrypt(key, []byte(wr.Password))
 		if err != nil {
-			m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+			m.setError("%s", err)
 			m.editModel.editing = false
 			m.pendingWizard = nil
 			m.pendingEditID = 0
@@ -641,8 +618,7 @@ func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
 
 	oldName := m.editModel.origConn.Name
 	if err := db.Update(m.database, conn); err != nil {
-		m.editModel.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.editModel.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		m.setError("%s", err)
 		m.editModel.editing = false
 		m.pendingWizard = nil
 		m.pendingEditID = 0
@@ -650,8 +626,8 @@ func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
 	}
 
 	m.editModel.editing = false
-	m.editModel.statusMsg = fmt.Sprintf("%q updated", wr.Name)
-	m.editModel.statusStyle = successStyle
+	m.statusMsg = fmt.Sprintf("%q updated", wr.Name)
+	m.statusMsgStyle = successStyle
 	m.pendingWizard = nil
 	m.pendingEditID = 0
 	m.onConnectionEdited(oldName, wr.Name)
