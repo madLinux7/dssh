@@ -14,9 +14,9 @@ import (
 	"golang.org/x/term"
 )
 
-func newWizardCmd() *cobra.Command {
+func newCreateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "wizard",
+		Use:     "create",
 		Aliases: []string{"new"},
 		Short:   "Interactive wizard to create a new connection",
 		Args:    cobra.NoArgs,
@@ -32,7 +32,7 @@ func newWizardCmd() *cobra.Command {
 				return err
 			}
 
-			result := tui.Run(conns, d, tui.TabNew)
+			result := tui.Run(conns, d, tui.TabCreate)
 			if result == nil || result.Action == tui.ActionNone {
 				return nil
 			}

@@ -7,23 +7,28 @@
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
-The only SSH connection management tool you'll ever need. Dead-simple and cross-platform for every CLI.
+The only SSH connection management tool you'll ever need. No dependencies, no more editing `/etc/hosts`.
 
-Three core features: **Create, Connect, Delete**.
+Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-platform for every CLI.
 
-Passwords are encrypted using a passphrase (_you should consider using pubkeys only tho ;))_.
+Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
 <!-- TODO: Replace with VHS recording of `dssh` picker + connect flow -->
 ![dssh demo](demo_1.gif)
 
 ## Features
 
+**Core:**
+
+- **Fancy TUI** ✨ — run `dssh` with no args to connect and manage all your connections
 - **Instant connect** 🚀 — `dssh myserver` and you're in
-- **Fancy interactive picker** ✨ — run `dssh` with no args to connect, add and delete connections
-- **Wizard** 🪄 — create connections without memorizing flags
-- **Start in a directory** 📂 — optionally land in a specific remote directory on connect
+- **Wizard** 🪄 — easily add new connections without memorizing flags
+- **Edit** ✏️ — no need to delete and re-add connections, just edit them
+
+Also:
+
+- **Launch into a directory** 📂 — optionally land in a specific remote directory on connect
 - **Password encryption** 🔒 — AES-256-GCM + Argon2id, protected by a master passphrase
-- **No dependencies** 🗽 — single static binary, uses your system's `ssh`
 - **Cross-platform** 💻 — Linux, macOS, Windows, FreeBSD (amd64 + arm64)
 - **Dead simple migration** 📦 — moving to a new machine? Just take `~/.dssh/dssh.db` with you. That's it.
 
@@ -123,12 +128,12 @@ dssh myserver
 dssh myserver -- -v -L 8080:localhost:80
 ```
 
-### Wizard
+### Create
 
-Create a connection interactively with the TUI wizard.
+Launch the TUI wizard to create a connection interactively.
 
 ```bash
-dssh wizard
+dssh create
 dssh new # alias
 ```
 
@@ -200,11 +205,11 @@ All data lives in `~/.dssh/dssh.db` (SQLite).
 
 dssh stands on the shoulders of giants. Huge thanks to the maintainers and contributors of these amazing projects:
 
-- **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** by [Charm](https://charm.sh) — a sick TUI framework that powers the picker, wizard, and delete views
-- **[Bubbles](https://github.com/charmbracelet/bubbles)** by [Charm](https://charm.sh) — ready-made TUI components (lists, text inputs) so I don't need to reinvent the wheel
+- **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** by [Charm](https://charm.sh) — pretty sick TUI framework keeping me from reinventing the wheel for this
+- **[Bubbles](https://github.com/charmbracelet/bubbles)** by [Charm](https://charm.sh) — ready-to-go TUI components (lists, text inputs) so I don't need to reinvent the wheel
 - **[Lip Gloss](https://github.com/charmbracelet/lipgloss)** by [Charm](https://charm.sh) — style definitions that make the terminal look ✨ pretty ✨
 - **[Cobra](https://github.com/spf13/cobra)** by [Steve Francia](https://github.com/spf13) — the CLI framework powering every `dssh` command
 - **[modernc.org/sqlite](https://gitlab.com/cznic/sqlite)** by [Jan Mercl](https://gitlab.com/cznic) — pure-Go SQLite driver that lets you ship a single static binary with zero CGO
 - **[golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto)** by the Go team — Argon2id key derivation keeping your passwords safe
 - **[golang.org/x/term](https://pkg.go.dev/golang.org/x/term)** by the Go team — secure terminal password reading without echo
-- **[UPX](https://upx.github.io/)** by Markus Oberhumer, Laszlo Molnar & John Reiser - Reducing the release binary by an **insane 62%**! (8.4MB _Regular Go binary_ -> 3.2.MB _Release binary_)
+- **[UPX](https://upx.github.io/)** by Markus Oberhumer, Laszlo Molnar & John Reiser - Reducing the Linux release binary size by an **insane 64%**! (9.0MB -> 3.3MB)

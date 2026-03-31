@@ -51,7 +51,9 @@ func newRootCmd(version string) *cobra.Command {
 		newAddCmd(),
 		newRmCmd(),
 		newListCmd(),
-		newWizardCmd(),
+		newCreateCmd(),
+		newEditCmd(),
+		newDeleteCmd(),
 		newResetCmd(),
 	)
 
@@ -84,7 +86,7 @@ func runPicker(extraArgs []string) error {
 
 	initialTab := tui.TabConnect
 	if len(conns) == 0 {
-		initialTab = tui.TabNew
+		initialTab = tui.TabCreate
 	}
 
 	result := tui.Run(conns, d, initialTab)

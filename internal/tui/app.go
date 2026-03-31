@@ -1,7 +1,7 @@
 // Package tui implements the interactive terminal UI using Bubble Tea.
 //
 // Architecture: The TUI follows Bubble Tea's Elm-like pattern (Model → Update → View).
-// AppModel is the top-level model that manages three tab sub-models (Connect, New, Delete)
+// AppModel is the top-level model that manages four tab sub-models (Create, Connect, Edit, Delete)
 // and an optional passphrase modal overlay. Each sub-model handles its own input and
 // rendering, while AppModel coordinates tab switching, saves, and result propagation
 // back to the CLI layer.
@@ -27,7 +27,7 @@ import (
 type Tab int
 
 const (
-	TabNew Tab = iota
+	TabCreate Tab = iota
 	TabConnect
 	TabEdit
 	TabDelete
@@ -38,7 +38,7 @@ type AppModel struct {
 	activeTab      Tab
 	tabs           []string
 	connectModel   ConnectModel
-	newModel       NewModel
+	createModel       CreateModel
 	editModel      EditModel
 	deleteModel    DeleteModel
 	database       *sql.DB
@@ -69,9 +69,9 @@ func Run(connections []model.Connection, d *sql.DB, initialTab Tab) *AppResult {
 
 	m := AppModel{
 		activeTab:    initialTab,
-		tabs:         []string{"New", "Connect", "Edit", "Delete"},
+		tabs:         []string{"Create", "Connect", "Edit", "Delete"},
 		connectModel: newConnectModel(connections, 80, 20),
-		newModel:     newNewModel(80, 20),
+		createModel:     newCreateModel(80, 20),
 		editModel:    newEditModel(connItems, d, 80, 20),
 		deleteModel:  newDeleteModel(connItems, d, 80, 20),
 		database:     d,
@@ -109,7 +109,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			contentWidth = 1
 		}
 		m.connectModel.SetSize(contentWidth, subModelHeight)
-		m.newModel.SetSize(contentWidth, subModelHeight)
+		m.createModel.SetSize(contentWidth, subModelHeight)
 		m.editModel.SetSize(contentWidth, subModelHeight)
 		m.deleteModel.SetSize(contentWidth, subModelHeight)
 		return m, nil
@@ -171,9 +171,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.result = result
 			return m, tea.Quit
 		}
-	case TabNew:
+	case TabCreate:
 		var result *AppResult
-		m.newModel, result, cmd = m.newModel.Update(msg)
+		m.createModel, result, cmd = m.createModel.Update(msg)
 		if result != nil {
 			switch result.Action {
 			case ActionNone:
@@ -305,7 +305,7 @@ func (m *AppModel) onConnectionSaved(name string) {
 	}
 	m.statusMsg = fmt.Sprintf("%q added", name)
 	m.statusMsgStyle = successStyle
-	m.newModel = m.newModel.reset()
+	m.createModel = m.createModel.reset()
 }
 
 // finalizePasswordSave encrypts the password with the given passphrase and saves the connection.
@@ -496,8 +496,8 @@ func (m AppModel) View() string {
 	switch m.activeTab {
 	case TabConnect:
 		content = m.connectModel.View()
-	case TabNew:
-		content = m.newModel.View()
+	case TabCreate:
+		content = m.createModel.View()
 	case TabEdit:
 		content = m.editModel.View()
 	case TabDelete:

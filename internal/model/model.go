@@ -10,7 +10,10 @@ var ReservedNames = map[string]bool{
 	"add":    true,
 	"rm":     true,
 	"list":   true,
-	"wizard": true,
+	"new":    true,
+	"create": true,
+	"edit":   true,
+	"delete": true,
 	"reset":  true,
 	"help":   true,
 }

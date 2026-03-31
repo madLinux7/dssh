@@ -19,8 +19,8 @@ const (
 	fieldCount
 )
 
-// NewModel is the Bubble Tea model for the New (wizard) tab.
-type NewModel struct {
+// CreateModel is the Bubble Tea model for the New tab.
+type CreateModel struct {
 	inputs   [fieldCount]textinput.Model
 	focused  int
 	authType string // "key" or "password"
@@ -29,7 +29,7 @@ type NewModel struct {
 	height   int
 }
 
-func newNewModel(width, height int) NewModel {
+func newCreateModel(width, height int) CreateModel {
 	var inputs [fieldCount]textinput.Model
 
 	inputs[fieldName] = textinput.New()
@@ -72,7 +72,7 @@ func newNewModel(width, height int) NewModel {
 	inputs[fieldPassword].CharLimit = 128
 	inputs[fieldPassword].Width = 30
 
-	return NewModel{
+	return CreateModel{
 		inputs:   inputs,
 		focused:  fieldName,
 		authType: "key",
@@ -82,7 +82,7 @@ func newNewModel(width, height int) NewModel {
 }
 
 // reset clears all fields and returns focus to the name field.
-func (m NewModel) reset() NewModel {
+func (m CreateModel) reset() CreateModel {
 	for i := range m.inputs {
 		m.inputs[i].SetValue("")
 	}
@@ -96,7 +96,7 @@ func (m NewModel) reset() NewModel {
 }
 
 // visibleFields returns indices of fields visible for the current auth type.
-func (m NewModel) visibleFields() []int {
+func (m CreateModel) visibleFields() []int {
 	var fields []int
 	for i := 0; i < fieldCount; i++ {
 		if m.authType == "password" && i == fieldIdentityFile {
@@ -110,7 +110,7 @@ func (m NewModel) visibleFields() []int {
 	return fields
 }
 
-func (m NewModel) nextField() (int, bool) {
+func (m CreateModel) nextField() (int, bool) {
 	if m.atSave {
 		return m.focused, true
 	}
@@ -126,7 +126,7 @@ func (m NewModel) nextField() (int, bool) {
 	return m.focused, m.atSave
 }
 
-func (m NewModel) prevField() (int, bool) {
+func (m CreateModel) prevField() (int, bool) {
 	if m.atSave {
 		fields := m.visibleFields()
 		return fields[len(fields)-1], false
@@ -143,7 +143,7 @@ func (m NewModel) prevField() (int, bool) {
 	return m.focused, false
 }
 
-func (m NewModel) Update(msg tea.Msg) (NewModel, *AppResult, tea.Cmd) {
+func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -212,7 +212,7 @@ func (m NewModel) Update(msg tea.Msg) (NewModel, *AppResult, tea.Cmd) {
 	return m, nil, nil
 }
 
-func (m NewModel) updateFocus() NewModel {
+func (m CreateModel) updateFocus() CreateModel {
 	for i := range m.inputs {
 		if i == m.focused && !m.atSave {
 			m.inputs[i].Focus()
@@ -227,7 +227,7 @@ func (m NewModel) updateFocus() NewModel {
 	return m
 }
 
-func (m NewModel) View() string {
+func (m CreateModel) View() string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("New Connection"))
@@ -257,7 +257,7 @@ func (m NewModel) View() string {
 	return b.String()
 }
 
-func (m *NewModel) SetSize(w, h int) {
+func (m *CreateModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }

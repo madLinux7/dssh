@@ -28,7 +28,7 @@ func newListCmd() *cobra.Command {
 			}
 
 			if len(conns) == 0 {
-				fmt.Println("No connections saved. Use 'dssh add' or 'dssh wizard' to create one.")
+				fmt.Println("No connections saved. Use 'dssh add [name] [user@host]' or 'dssh create' to add one.")
 				return nil
 			}
 
