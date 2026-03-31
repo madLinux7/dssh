@@ -318,6 +318,12 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 		return m, nil, nil
 	}
 
+	if err := model.ValidateName(name); err != nil {
+		m.statusMsg = fmt.Sprintf("Error: %s", err)
+		m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+		return m, nil, nil
+	}
+
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port < 1 || port > 65535 {
 		m.statusMsg = fmt.Sprintf("Error: invalid port: %s", portStr)

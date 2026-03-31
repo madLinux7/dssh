@@ -24,6 +24,9 @@ and the password is encrypted with your master passphrase.`,
 		Args: cobra.RangeArgs(2, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+			if err := model.ValidateName(name); err != nil {
+				return err
+			}
 			target := args[1]
 
 			user, host, parsedPort, err := parseTarget(target)

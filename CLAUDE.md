@@ -31,7 +31,7 @@ cmd/dssh/main.go → cli.Execute()
    (SQLite layer)   (AES-256-GCM + Argon2id)
        ↓
    internal/model/
-   (Connection struct, AuthType enum)
+   (Connection struct, AuthType enum, reserved-name validation)
 ```
 
 ### Key design decisions
@@ -43,9 +43,10 @@ cmd/dssh/main.go → cli.Execute()
 
 ### TUI structure (Bubble Tea)
 
-`AppModel` manages three tabs and a passphrase modal overlay:
+`AppModel` manages four tabs and a passphrase modal overlay:
 - **TabConnect** — list picker for saved connections
 - **TabNew** — form wizard with auth-type toggle (key vs password, changes visible fields)
+- **TabEdit** — list picker → inline form to modify all fields of an existing connection (name, user, host, port, directory, auth type, password)
 - **TabDelete** — list with triple-confirm mechanism (3 Enters on same item within 1 second)
 - **PassphraseModal** — create mode (2 fields) on first password save, enter mode (1 field) thereafter
 

@@ -245,6 +245,11 @@ func (m AppModel) handleSave(wr *WizardResult) (AppModel, tea.Cmd) {
 		return m, nil
 	}
 
+	if err := model.ValidateName(wr.Name); err != nil {
+		m.setError("%s", err)
+		return m, nil
+	}
+
 	port, err := strconv.Atoi(wr.Port)
 	if err != nil || port < 1 || port > 65535 {
 		m.setError("invalid port: %s", wr.Port)
