@@ -21,14 +21,15 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 - [How it works](#how-it-works)
 - [Usage](#usage)
   - [Command Reference](#command-reference)
+  - [TUI Navigation](#tui-navigation)
   - [Quick start](#quick-start---lets-go)
   - [Add a connection](#add-a-connection)
   - [Connect to a host](#connect-to-a-host)
-  - [Create](#create)
-  - [Edit a connection](#edit-a-connection)
-  - [Delete a connection (TUI)](#delete-a-connection-tui)
-  - [List connections](#list-connections)
-  - [Remove a connection](#remove-a-connection)
+  - [Create (TUI)](#create-tui)
+  - [Edit (TUI)](#edit-tui)
+  - [Delete (TUI)](#delete-tui)
+  - [List connections (CLI)](#list-connections-cli)
+  - [Remove a connection (CLI)](#remove-a-connection-cli)
   - [Reset everything](#reset-everything)
 - [Installation](#installation)
   - [Install script (recommended)](#install-script-recommended)
@@ -80,6 +81,17 @@ dssh is a thin wrapper around your system's `ssh` binary:
 | `dssh reset` | Delete all data (double confirmation) |
 | `dssh --version` | Print version |
 
+### TUI Navigation
+
+| Key | Action |
+|---|---|
+| `Tab` / `Shift+Tab` | Switch between tabs |
+| `↑` / `↓` | Navigate lists |
+| `Enter` | Select / confirm |
+| `ESC` / `Q` | Quit |
+
+![dssh tab navigation](demo_tabs.gif)
+
 ### Quick start - Let's Go!
 
 ```bash
@@ -101,8 +113,6 @@ dssh
 ```
 
 Run `dssh` with no arguments to launch the TUI.
-
-Switch between tabs with `Tab` / `Shift+Tab`, navigate lists with arrow keys, press `Enter` to select, `ESC` or `Q` to quit.
 
 ### Add a connection
 
@@ -133,7 +143,7 @@ dssh myserver
 dssh myserver -- -v -L 8080:localhost:80
 ```
 
-### Create
+### Create (TUI)
 
 Launch the TUI wizard to create a connection interactively.
 
@@ -146,7 +156,7 @@ dssh new # alias
 
 The wizard supports both key-based and password-based authentication. For password auth, you'll be prompted to create a master passphrase on first use.
 
-### Edit a connection
+### Edit (TUI)
 
 Launch the TUI directly on the Edit tab to modify an existing connection.
 
@@ -154,7 +164,7 @@ Launch the TUI directly on the Edit tab to modify an existing connection.
 dssh edit
 ```
 
-### Delete a connection (TUI)
+### Delete (TUI)
 
 Launch the TUI directly on the Delete tab. Requires pressing Enter 3 times on the same item to confirm.
 
@@ -162,7 +172,7 @@ Launch the TUI directly on the Delete tab. Requires pressing Enter 3 times on th
 dssh delete
 ```
 
-### List connections
+### List connections (CLI)
 
 ```bash
 dssh list
@@ -170,16 +180,20 @@ dssh ls # alias
 ```
 
 ```
-NAME       USER   HOST           PORT  AUTH  DIR
-myserver   root   192.168.1.10   22    key   /var/www
-webbox     deploy web.host       8022  key   -
+NAME                USER       HOST            PORT   AUTH      DIR
+mike-pulse-001      nomad      10.51.140.154   22     key       -
+myserver            root       192.168.1.10    22     password  -
+rpg-server          npc        192.168.188.7   22222  key       /var/larp
+sharp-nexus-001     deploy     10.105.210.233  22     key       -
+skylink             root       skylink.vps     22     key       -
 ```
 
-### Remove a connection
+### Remove a connection (CLI)
 
 ```bash
 dssh rm myserver
 ```
+Remove a connection instantly. No confirmation asked.
 
 ### Reset everything
 
@@ -196,6 +210,8 @@ All data has been reset
 ```
 
 ## Installation
+
+_(Available on package managers for various Linux distros, macOS, FreeBSD and Windows soon!)_
 
 ### Install script (recommended)
 
