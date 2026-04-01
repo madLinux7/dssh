@@ -11,4 +11,4 @@ vendor/
 .DS_Store
 Thumbs.db
 
-push-release.sh
+push-full.sh
