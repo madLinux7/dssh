@@ -1,0 +1,14 @@
+*.exe
+dist/
+
+vendor/
+
+.idea/
+.vscode/
+*.swp
+*.swo
+
+.DS_Store
+Thumbs.db
+
+push-release.sh
