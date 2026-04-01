@@ -13,7 +13,6 @@ Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-pla
 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
-<!-- TODO: Replace with VHS recording of `dssh` picker + connect flow -->
 ![dssh demo](demo_1.gif)
 
 ## Table of Contents
@@ -76,6 +75,8 @@ dssh is a thin wrapper around your system's `ssh` binary:
 | `dssh rm <name>` | Delete a saved connection |
 | `dssh list` / `dssh ls` | List all saved connections |
 | `dssh create` / `dssh new` | Interactive form to create a connection |
+| `dssh edit` | Edit an existing connection |
+| `dssh delete` | Delete a connection (TUI, triple-confirm) |
 | `dssh reset` | Delete all data (double confirmation) |
 | `dssh --version` | Print version |
 
@@ -141,7 +142,6 @@ dssh create
 dssh new # alias
 ```
 
-<!-- TODO: Replace with VHS recording of `dssh wizard` -->
 ![dssh wizard](demo_wizard.gif)
 
 The wizard supports both key-based and password-based authentication. For password auth, you'll be prompted to create a master passphrase on first use.
