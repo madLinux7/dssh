@@ -1,22 +1,14 @@
-# Binaries
-dssh
-dssh-*
 *.exe
 dist/
 
-# Go
 vendor/
 
-# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
 .DS_Store
 Thumbs.db
 
-# Project
-*.png
-*.tape
+push-release.sh
