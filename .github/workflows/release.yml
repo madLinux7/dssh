@@ -50,6 +50,13 @@ jobs:
               go build -ldflags="$LDFLAGS" -o "$output" ./cmd/dssh/
           done
 
+      - name: Create tar.gz archives for macOS binaries
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          for arch in amd64 arm64; do
+            tar -czf "dist/dssh-darwin-${arch}.tar.gz" -C dist "dssh-darwin-${arch}"
+          done
+
       - name: Compress Linux binaries with UPX
         run: |
           sudo apt-get update && sudo apt-get install -y upx
