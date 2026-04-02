@@ -13,7 +13,20 @@ Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-pla
 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
-![dssh demo](demo_1.gif)
+<p align="center">
+  <img src="demo_1.gif" alt="dssh demo"><br>
+  <sub>TUI connect demo</sub>
+</p>
+
+<p align="center">
+  <img src="demo_instant_connect.gif" alt="dssh CLI instant connect demo"><br>
+  <sub>CLI instant connect demo</sub>
+</p>
+
+<p align="center">
+  <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
+  <sub>TUI navigation demo</sub>
+</p>
 
 ## Table of Contents
 
@@ -32,7 +45,8 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
   - [Remove a connection (CLI)](#remove-a-connection-cli)
   - [Reset everything](#reset-everything)
 - [Installation](#installation)
-  - [Install script (recommended)](#install-script-recommended)
+  - [Install & Update script (recommended)](#install--update-script-recommended)
+  - [Homebrew (macOS)](#homebrew-macos)
   - [From GitHub Releases](#from-github-releases)
   - [From source](#from-source)
   - [Build locally](#build-locally)
@@ -89,8 +103,6 @@ dssh is a thin wrapper around your system's `ssh` binary:
 | `↑` / `↓` | Navigate lists |
 | `Enter` | Select / confirm |
 | `ESC` / `Q` | Quit |
-
-![dssh tab navigation](demo_tabs.gif)
 
 ### Quick start - Let's Go!
 
@@ -211,9 +223,7 @@ All data has been reset
 
 ## Installation
 
-_(Available on package managers for various Linux distros, macOS, FreeBSD and Windows soon!)_
-
-### Install script (recommended)
+### Install & Update script (recommended)
 
 **Linux / macOS / FreeBSD:**
 
@@ -230,6 +240,14 @@ irm https://raw.githubusercontent.com/madLinux7/dssh/main/install.ps1 | iex
 ```
 
 Installs to `%LOCALAPPDATA%\dssh` and adds it to your PATH automatically.
+
+### Homebrew (macOS)
+
+```bash
+brew install madLinux7/tap/dssh
+```
+
+_Other package managers for Linux & Windows following soon!_
 
 ### From GitHub Releases
 
