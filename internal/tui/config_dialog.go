@@ -2,59 +2,60 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/sshconfig"
 )
 
 // configPage tracks which page the dialog is on.
 type configPage int
 
 const (
-	configPageMain configPage = iota
-	configPageBoth
+	configPageMain    configPage = iota // page 1: parse mode selection
+	configPageSSHDest                   // page 2: ssh_config target destination
+	configPageCreate                    // page 3: confirm file/dir creation
 )
 
 // configDialogModel is the Bubble Tea model for the first-run / dssh config dialog.
 type configDialogModel struct {
-	page            configPage
-	cursor          int
-	width           int
-	height          int
-	result          *model.RuntimeConfig
-	quitting        bool
-	pendingSSHTarget model.SSHConfigTarget // set when entering page 2
-}
+	page     configPage
+	cursor   int
+	width    int
+	height   int
+	result   *model.RuntimeConfig
+	quitting bool
 
-// mainOptions is the list of options on page 1.
-var mainOptions = []struct {
-	label       string
-	parseMode   model.ParseMode
-	sshTarget   model.SSHConfigTarget
-	hasSubPage  bool
-}{
-	{"Use SQLite only", model.ParseModeSQLiteOnly, "", false},
-	{"Use ssh_config only (Main file: ~/.ssh/config)", model.ParseModeSSHConfigOnly, model.SSHConfigTargetMainFile, false},
-	{"Use ssh_config only (Directive: ~/.ssh/config.d/dssh)", model.ParseModeSSHConfigOnly, model.SSHConfigTargetDirective, false},
-	{"Use both (ssh_config Main File)", model.ParseModeBoth, model.SSHConfigTargetMainFile, true},
-	{"Use both (ssh_config Directive)", model.ParseModeBoth, model.SSHConfigTargetDirective, true},
-}
+	// Pending state carried from page 1 to page 2.
+	pendingParseMode model.ParseMode
 
-var bothOptions = []struct {
-	label    string
-	bothMode model.BothMode
-	goBack   bool
-}{
-	{"Separated: Toggle between SQLite & ssh_config using CTRL+L", model.BothModeSeparate, false},
-	{"Combined: One list for both SQLite & ssh_config", model.BothModeCombine, false},
-	{"\u2190 Go back", "", true},
+	// Page 2: custom path text input.
+	pathInput    textinput.Model
+	pathInputErr string
+
+	// Page 3: path that needs creation.
+	pendingPath   string
+	pendingTarget string // the resolved path to store in config
+
+	version string
 }
 
 // RunConfigDialog launches the standalone config dialog. Returns nil on cancel.
-func RunConfigDialog() *model.RuntimeConfig {
-	m := configDialogModel{}
+func RunConfigDialog(version string) *model.RuntimeConfig {
+	ti := textinput.New()
+	ti.Placeholder = "/path/to/ssh_config"
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	m := configDialogModel{
+		pathInput: ti,
+		version:   version,
+	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
@@ -78,159 +79,395 @@ func (m configDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			m.quitting = true
-			return m, tea.Quit
-
-		case "esc":
-			if m.page == configPageBoth {
-				m.page = configPageMain
-				m.cursor = 0
-				return m, nil
-			}
-			m.quitting = true
-			return m, tea.Quit
-
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-			return m, nil
-
-		case "down", "j":
-			max := m.maxCursor()
-			if m.cursor < max {
-				m.cursor++
-			}
-			return m, nil
-
-		case "enter":
-			return m.handleSelect()
+		switch m.page {
+		case configPageMain:
+			return m.updateMain(msg)
+		case configPageSSHDest:
+			return m.updateSSHDest(msg)
+		case configPageCreate:
+			return m.updateCreate(msg)
 		}
 	}
 	return m, nil
 }
 
-func (m configDialogModel) maxCursor() int {
-	if m.page == configPageBoth {
-		return len(bothOptions) - 1
+// ── Page 1: parse mode ──────────────────────────────────────────────
+
+func (m configDialogModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		m.quitting = true
+		return m, tea.Quit
+	case "esc":
+		m.quitting = true
+		return m, tea.Quit
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < 2 {
+			m.cursor++
+		}
+	case "enter":
+		switch m.cursor {
+		case 0: // SQLite only
+			m.result = &model.RuntimeConfig{
+				ParseMode:         model.ParseModeSQLiteOnly,
+				DefaultSaveTarget: model.SaveTargetSQLite,
+			}
+			return m, tea.Quit
+		case 1: // ssh_config only → page 2
+			m.pendingParseMode = model.ParseModeSSHConfigOnly
+			m.page = configPageSSHDest
+			m.cursor = 0
+			m.pathInput.Reset()
+			m.pathInputErr = ""
+		case 2: // both → page 2
+			m.pendingParseMode = model.ParseModeBoth
+			m.page = configPageSSHDest
+			m.cursor = 0
+			m.pathInput.Reset()
+			m.pathInputErr = ""
+		}
 	}
-	return len(mainOptions) - 1
+	return m, nil
 }
 
-func (m configDialogModel) handleSelect() (tea.Model, tea.Cmd) {
-	if m.page == configPageMain {
-		opt := mainOptions[m.cursor]
-		if opt.hasSubPage {
-			// Store the ssh target for later, move to page 2.
-			m.pendingSSHTarget = opt.sshTarget
-			m.page = configPageBoth
-			m.cursor = 0
+// ── Page 2: ssh_config destination ──────────────────────────────────
+
+func (m configDialogModel) updateSSHDest(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When the text input is focused, delegate most keys to it.
+	if m.cursor == 2 && m.pathInput.Focused() {
+		switch msg.String() {
+		case "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		case "esc":
+			m.pathInput.Blur()
 			return m, nil
+		case "up":
+			m.pathInput.Blur()
+			m.cursor--
+			return m, nil
+		case "enter":
+			return m.confirmSSHDest()
+		default:
+			var cmd tea.Cmd
+			m.pathInput, cmd = m.pathInput.Update(msg)
+			return m, cmd
 		}
-		// Direct selection.
-		m.result = &model.RuntimeConfig{
-			ParseMode:         opt.parseMode,
-			SSHConfigTarget:   opt.sshTarget,
-			DefaultSaveTarget: model.SaveTargetSQLite,
-			BothMode:          model.BothModeSeparate,
-		}
-		return m, tea.Quit
 	}
 
-	// Page 2: both sub-options.
-	opt := bothOptions[m.cursor]
-	if opt.goBack {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		m.quitting = true
+		return m, tea.Quit
+	case "esc":
 		m.page = configPageMain
+		m.cursor = 0
+		return m, nil
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < 2 {
+			m.cursor++
+		}
+		if m.cursor == 2 {
+			m.pathInput.Focus()
+			return m, textinput.Blink
+		}
+	case "enter":
+		return m.confirmSSHDest()
+	}
+	return m, nil
+}
+
+func (m configDialogModel) confirmSSHDest() (tea.Model, tea.Cmd) {
+	var dest string
+	switch m.cursor {
+	case 0:
+		p, err := sshconfig.MainFilePath()
+		if err != nil {
+			m.pathInputErr = err.Error()
+			return m, nil
+		}
+		dest = p
+	case 1:
+		p, err := sshconfig.DirectiveFilePath()
+		if err != nil {
+			m.pathInputErr = err.Error()
+			return m, nil
+		}
+		dest = p
+	case 2:
+		raw := strings.TrimSpace(m.pathInput.Value())
+		if raw == "" {
+			m.pathInputErr = "path cannot be empty"
+			return m, nil
+		}
+		// Expand ~ to home directory.
+		if strings.HasPrefix(raw, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				raw = filepath.Join(home, raw[2:])
+			}
+		}
+		dest = raw
+	}
+
+	// Check if the resolved path exists.
+	if _, err := os.Stat(dest); os.IsNotExist(err) {
+		m.pendingPath = dest
+		m.pendingTarget = dest
+		m.page = configPageCreate
 		m.cursor = 0
 		return m, nil
 	}
 
-	m.result = &model.RuntimeConfig{
-		ParseMode:         model.ParseModeBoth,
-		BothMode:          opt.bothMode,
-		SSHConfigTarget:   m.pendingSSHTarget,
-		DefaultSaveTarget: model.SaveTargetSQLite,
-	}
+	m = m.finishWithDest(dest)
 	return m, tea.Quit
 }
+
+func (m configDialogModel) finishWithDest(dest string) configDialogModel {
+	m.result = &model.RuntimeConfig{
+		ParseMode:         m.pendingParseMode,
+		SSHConfigDest:     dest,
+		DefaultSaveTarget: model.SaveTargetSQLite,
+		BothViewMode:      model.SourceSQLite,
+	}
+	return m
+}
+
+// ── Page 3: create missing file ─────────────────────────────────────
+
+func (m configDialogModel) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		m.quitting = true
+		return m, tea.Quit
+	case "esc":
+		// Back to destination page.
+		m.page = configPageSSHDest
+		m.cursor = 0
+		return m, nil
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < 1 {
+			m.cursor++
+		}
+	case "enter":
+		if m.cursor == 0 {
+			// Create directory and file.
+			dir := filepath.Dir(m.pendingPath)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				m.pathInputErr = fmt.Sprintf("mkdir failed: %s", err)
+				m.page = configPageSSHDest
+				return m, nil
+			}
+			f, err := os.OpenFile(m.pendingPath, os.O_CREATE|os.O_WRONLY, 0600)
+			if err != nil {
+				m.pathInputErr = fmt.Sprintf("create failed: %s", err)
+				m.page = configPageSSHDest
+				return m, nil
+			}
+			f.Close()
+
+			m = m.finishWithDest(m.pendingTarget)
+			return m, tea.Quit
+		}
+		// Go back.
+		m.page = configPageSSHDest
+		m.cursor = 0
+		return m, nil
+	}
+	return m, nil
+}
+
+// ── Views ───────────────────────────────────────────────────────────
 
 func (m configDialogModel) View() string {
 	if m.quitting {
 		return ""
 	}
 
-	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(magenta)).Bold(true)
-	subtitleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(brightWhite))
-	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(dimGray)).Italic(true)
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(magenta))
-	unselectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(dimGray))
+	var content string
+	switch m.page {
+	case configPageMain:
+		content = m.viewMain()
+	case configPageSSHDest:
+		content = m.viewSSHDest()
+	case configPageCreate:
+		content = m.viewCreate()
+	}
 
-	var b strings.Builder
+	return m.renderFrame(content)
+}
 
-	if m.page == configPageMain {
-		b.WriteString(titleStyle.Render("Welcome to dssh!"))
-		b.WriteString("\n\n")
-		b.WriteString(subtitleStyle.Render("Please select the mode to store and work with your connections."))
-		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("You can change this anytime using %s", titleStyle.Render("dssh config")))
-		b.WriteString("\n\n")
+// renderFrame wraps page content in the tab + content box frame.
+func (m configDialogModel) renderFrame(content string) string {
+	color := purple
 
-		for i, opt := range mainOptions {
-			cursor := "  "
-			style := unselectedStyle
-			if i == m.cursor {
-				cursor = "> "
-				style = selectedStyle
-			}
+	// Tab — reuse the same style as the main app but with purple.
+	tabStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(brightWhite).
+		Border(lipgloss.RoundedBorder()).
+		BorderBottom(false).
+		BorderForeground(color).
+		Padding(0, 2)
 
-			label := opt.label
-			if opt.hasSubPage {
-				label += " \u2192"
-			}
+	rendered := tabStyle.Render("Config")
+	lines := strings.Split(rendered, "\n")
+	tabTopLine := lines[0]
+	tabBotLine := lines[1]
+	tabWidth := lipgloss.Width(tabTopLine)
 
-			// Add path hints in italic gray
-			switch i {
-			case 0:
-				label = addPathHint(label, "~/.dssh/dssh.db", hintStyle)
-			}
-
-			b.WriteString(fmt.Sprintf("%s%s\n", cursor, style.Render(label)))
-		}
-	} else {
-		b.WriteString(subtitleStyle.Render("How do you want to navigate both of your connections?"))
-		b.WriteString("\n\n")
-
-		for i, opt := range bothOptions {
-			cursor := "  "
-			style := unselectedStyle
-			if i == m.cursor {
-				cursor = "> "
-				style = selectedStyle
-			}
-
-			label := opt.label
-			if i == 0 {
-				// Highlight CTRL+L in magenta
-				label = strings.Replace(label, "CTRL+L", titleStyle.Render("CTRL+L"), 1)
-				if i == m.cursor {
-					// Re-apply selected style for surrounding text
-					parts := strings.SplitN(opt.label, "CTRL+L", 2)
-					label = selectedStyle.Render(parts[0]) + titleStyle.Render("CTRL+L") + selectedStyle.Render(parts[1])
-				}
-			}
-
-			b.WriteString(fmt.Sprintf("%s%s\n", cursor, style.Render(label)))
+	// Version in top-right corner (on the bottom tab line, like the mode indicator).
+	if m.version != "" {
+		verStyle := lipgloss.NewStyle().Foreground(dimGray)
+		verStr := verStyle.Render(m.version)
+		verWidth := lipgloss.Width(verStr)
+		gap := m.width - tabWidth - verWidth - 1
+		if gap > 0 {
+			tabBotLine += strings.Repeat(" ", gap) + verStr
 		}
 	}
 
-	b.WriteString("\n")
-	b.WriteString(hintStyle.Render("↑/↓ navigate • enter select • esc cancel"))
+	tabBar := tabTopLine + "\n" + tabBotLine
 
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, b.String())
+	// Connecting line: tab bottom merges into content box top border.
+	var conn strings.Builder
+	colorStyle := lipgloss.NewStyle().Foreground(color)
+	conn.WriteRune('│')
+	for i := 0; i < tabWidth-2; i++ {
+		conn.WriteRune(' ')
+	}
+	conn.WriteRune('╰')
+	for pos := tabWidth; pos < m.width-1; pos++ {
+		conn.WriteRune('─')
+	}
+	conn.WriteRune('╮')
+	connLine := colorStyle.Render(conn.String())
+
+	// Content box height.
+	contentHeight := m.height - 4
+	if contentHeight < 2 {
+		contentHeight = 2
+	}
+
+	// Pad content to push the hint to the bottom.
+	contentLines := lipgloss.Height(content)
+	padNeeded := contentHeight - contentLines
+	if padNeeded > 0 {
+		content += strings.Repeat("\n", padNeeded)
+	}
+
+	contentBox := contentStyle.
+		BorderForeground(color).
+		Width(m.width - 2).
+		Height(contentHeight).
+		Render(content)
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		tabBar,
+		connLine,
+		contentBox,
+	)
 }
 
-func addPathHint(label, path string, style lipgloss.Style) string {
-	return label + " " + style.Render("("+path+")")
+// Shared styles for the config dialog pages.
+var (
+	cfgTitle    = lipgloss.NewStyle().Foreground(magenta).Bold(true)
+	cfgSubtitle = lipgloss.NewStyle().Foreground(brightWhite)
+	cfgHint     = lipgloss.NewStyle().Foreground(dimGray).Italic(true)
+	cfgSel      = lipgloss.NewStyle().Foreground(magenta)
+	cfgUnsel    = lipgloss.NewStyle().Foreground(brightWhite)
+	cfgErr      = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+	cfgCtrlL    = lipgloss.NewStyle().Foreground(purple).Bold(true)
+)
+
+// renderRadioOptions writes radio-button lines for the given labels at the cursor position.
+func renderRadioOptions(b *strings.Builder, options []string, cursor int) {
+	for i, opt := range options {
+		style := cfgUnsel
+		radio := "○"
+		if i == cursor {
+			style = cfgSel
+			radio = "●"
+		}
+		fmt.Fprintf(b, "  %s %s\n", style.Render(radio), style.Render(opt))
+	}
+}
+
+func (m configDialogModel) viewMain() string {
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(cfgTitle.Render("Welcome to dssh!"))
+	b.WriteString("\n\n")
+	b.WriteString(cfgSubtitle.Render("Please select the mode to store and work with your connections."))
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "You can change this anytime using %s", cfgTitle.Render("dssh config"))
+	b.WriteString("\n\n")
+
+	renderRadioOptions(&b, []string{
+		fmt.Sprintf("Use SQLite only %s", cfgHint.Render("(~/.dssh/dssh.db)")),
+		"Use ssh_config only — Select destination →",
+		fmt.Sprintf("Use both — Toggle with %s — Select destination →", cfgCtrlL.Render("CTRL+L")),
+	}, m.cursor)
+
+	b.WriteString("\n")
+	b.WriteString(cfgHint.Render("↑/↓ navigate • enter select • esc cancel"))
+	return b.String()
+}
+
+func (m configDialogModel) viewSSHDest() string {
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(cfgTitle.Render("Please select your ssh_config target destination"))
+	b.WriteString("\n\n")
+
+	renderRadioOptions(&b, []string{
+		fmt.Sprintf("Main File: %s", cfgHint.Render("~/.ssh/config")),
+		fmt.Sprintf("Directive: %s", cfgHint.Render("~/.ssh/config.d/dssh")),
+		"Enter custom path",
+	}, m.cursor)
+
+	b.WriteString("\n")
+	inputLabel := cfgUnsel
+	if m.cursor == 2 {
+		inputLabel = cfgSel
+	}
+	fmt.Fprintf(&b, "  %s  %s\n", inputLabel.Render("Path:"), m.pathInput.View())
+
+	if m.pathInputErr != "" {
+		fmt.Fprintf(&b, "  %s\n", cfgErr.Render(m.pathInputErr))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(cfgHint.Render("↑/↓ navigate • enter select • esc back"))
+	return b.String()
+}
+
+func (m configDialogModel) viewCreate() string {
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(cfgTitle.Render("File not found"))
+	b.WriteString("\n\n")
+	fmt.Fprintf(&b, "%s\n", cfgSubtitle.Render(fmt.Sprintf("The path %s does not exist.", cfgHint.Render(m.pendingPath))))
+	b.WriteString(cfgSubtitle.Render("Would you like to create it?"))
+	b.WriteString("\n\n")
+
+	renderRadioOptions(&b, []string{
+		"Create file and parent directories",
+		"← Go back",
+	}, m.cursor)
+
+	b.WriteString("\n")
+	b.WriteString(cfgHint.Render("↑/↓ navigate • enter select • esc back"))
+	return b.String()
 }

@@ -22,7 +22,7 @@ func List(path string) ([]model.Connection, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: %s", ErrConfigNotFound, path)
+			return nil, fmt.Errorf("%w: %s — Use 'dssh config' to reconfigure", ErrConfigNotFound, path)
 		}
 		return nil, err
 	}
@@ -42,6 +42,9 @@ func List(path string) ([]model.Connection, error) {
 		if strings.HasPrefix(trimmed, "Host ") {
 			// Flush previous
 			if current != nil {
+				if current.Host == "" {
+					current.Host = current.Name
+				}
 				conns = append(conns, *current)
 			}
 
@@ -94,6 +97,9 @@ func List(path string) ([]model.Connection, error) {
 
 	// Flush last block
 	if current != nil {
+		if current.Host == "" {
+			current.Host = current.Name // fallback: treat Host name as hostname
+		}
 		conns = append(conns, *current)
 	}
 

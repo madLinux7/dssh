@@ -81,12 +81,12 @@ func getConnectionSources(name string) (sqliteConn *model.Connection, sshcfgConn
 	return sqliteConn, sshcfgConn, nil
 }
 
-// sshConfigPath returns the ssh_config file path based on the current config target.
+// sshConfigPath returns the ssh_config file path based on the current config.
 func sshConfigPath() (string, error) {
-	if runtimeCfg == nil {
+	if runtimeCfg == nil || runtimeCfg.SSHConfigDest == "" {
 		return sshconfig.MainFilePath()
 	}
-	return sshconfig.FilePath(runtimeCfg.SSHConfigTarget)
+	return runtimeCfg.SSHConfigDest, nil
 }
 
 func listSQLiteConnections() ([]model.Connection, error) {

@@ -86,28 +86,12 @@ const (
 	ParseModeBoth          ParseMode = "both"
 )
 
-// BothMode determines how two sources are displayed when ParseMode is "both".
-type BothMode string
-
-const (
-	BothModeSeparate BothMode = "separate"
-	BothModeCombine  BothMode = "combine"
-)
-
 // SaveTarget determines where a new connection is saved when ParseMode is "both".
 type SaveTarget string
 
 const (
 	SaveTargetSQLite    SaveTarget = "sqlite"
 	SaveTargetSSHConfig SaveTarget = "ssh_config"
-)
-
-// SSHConfigTarget determines which ssh_config file to use.
-type SSHConfigTarget string
-
-const (
-	SSHConfigTargetMainFile  SSHConfigTarget = "main_file"
-	SSHConfigTargetDirective SSHConfigTarget = "directive"
 )
 
 // ParseModeLabel returns the display label for the current mode.
