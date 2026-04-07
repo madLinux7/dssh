@@ -22,6 +22,7 @@ type WizardResult struct {
 	AuthType     string // "key" or "password"
 	IdentityFile string
 	Password     string
+	SaveTo       model.SaveTarget // "sqlite" or "ssh_config" (only relevant in "both" mode)
 }
 
 // AppResult is returned from the TUI to the CLI layer.

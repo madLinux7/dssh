@@ -118,6 +118,16 @@ func (m *ConnectModel) AddItem(conn model.Connection) {
 	m.applyFilter()
 }
 
+// SetItems replaces the full connection list (used for source toggling).
+func (m *ConnectModel) SetItems(conns []model.Connection) {
+	items := make([]list.Item, len(conns))
+	for i, c := range conns {
+		items[i] = connectionItem{conn: c}
+	}
+	m.allItems = items
+	m.applyFilter()
+}
+
 // RemoveByName removes the first item matching the given connection name.
 func (m *ConnectModel) RemoveByName(name string) {
 	for i, item := range m.allItems {
