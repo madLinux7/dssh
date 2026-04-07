@@ -297,7 +297,7 @@ func (m CreateModel) toggleSaveTo() CreateModel {
 
 func (m CreateModel) updateFocus() CreateModel {
 	for i := range m.inputs {
-		if i == m.focused && !m.atSave {
+		if i == m.focused && !m.atSave && !m.atSaveTo {
 			m.inputs[i].Focus()
 			m.inputs[i].PromptStyle = focusedFieldStyle
 			m.inputs[i].TextStyle = focusedFieldStyle
@@ -330,29 +330,36 @@ func (m CreateModel) View() string {
 	authHint := blurredFieldStyle.Render("  (ctrl+t to toggle)")
 	isSSHConfigOnly := m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly
 	if isSSHConfigOnly {
-		authHint = statusStyle.Render("  (locked: ssh_config mode)")
+		authHint = statusStyle.Render("  (locked: no passwords in ssh_config mode)")
 	}
 	b.WriteString(fmt.Sprintf("%s %s%s\n", authLabel, focusedFieldStyle.Render(m.authType), authHint))
 
-	// Save To line (only in "both" mode).
+	// Save To (only in "both" mode).
 	if m.showSaveTo() {
+		b.WriteString("\n")
 		saveLabel := labelStyle.Render("Save To")
-		sqliteStyle := blurredFieldStyle
-		sshStyle := blurredFieldStyle
+		pad := labelStyle.Render("")
+
+		sqliteRadio, sshRadio := "○", "○"
+		sqliteStyle, sshStyle := blurredFieldStyle, blurredFieldStyle
 		if m.saveTo == model.SaveTargetSQLite {
+			sqliteRadio = "●"
 			sqliteStyle = focusedFieldStyle
 		} else {
+			sshRadio = "●"
 			sshStyle = focusedFieldStyle
 		}
-		saveToStr := sqliteStyle.Render("SQLite") + " | " + sshStyle.Render("ssh_config")
 		if m.atSaveTo {
-			saveToStr = "< " + saveToStr + " >"
+			sqliteStyle = focusedFieldStyle
+			sshStyle = focusedFieldStyle
 		}
+
 		hint := ""
 		if m.authType == "password" {
 			hint = statusStyle.Render("  (locked: passwords only in SQLite)")
 		}
-		b.WriteString(fmt.Sprintf("%s %s%s\n", saveLabel, saveToStr, hint))
+		b.WriteString(fmt.Sprintf("%s %s %s%s\n", saveLabel, sqliteStyle.Render(sqliteRadio), sqliteStyle.Render("SQLite"), hint))
+		b.WriteString(fmt.Sprintf("%s %s %s\n", pad, sshStyle.Render(sshRadio), sshStyle.Render("ssh_config")))
 	}
 
 	b.WriteString("\n")
@@ -365,9 +372,6 @@ func (m CreateModel) View() string {
 
 	b.WriteString("\n\n")
 	hints := "esc: cancel  |  up/down: navigate  |  ctrl+t: toggle auth  |  enter: next/save"
-	if m.showSaveTo() {
-		hints += "  |  left/right: toggle save target"
-	}
 	b.WriteString(statusStyle.Render(hints))
 
 	return b.String()

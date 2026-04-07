@@ -41,7 +41,7 @@ type EditModel struct {
 
 	// Shared
 	database       *sql.DB
-	sshConfigTarget model.SSHConfigTarget
+	sshConfigDest string
 	lastEdited     *editedInfo
 	statusMsg   string
 	statusStyle lipgloss.Style
@@ -383,13 +383,7 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 	}
 
 	if m.origConn.Source == model.SourceSSHConfig {
-		p, err := sshconfig.FilePath(m.sshConfigTarget)
-		if err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			return m, nil, nil
-		}
-		if err := sshconfig.Update(p, m.origConn.Name, conn); err != nil {
+		if err := sshconfig.Update(m.sshConfigDest, m.origConn.Name, conn); err != nil {
 			m.statusMsg = fmt.Sprintf("Error: %s", err)
 			m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 			return m, nil, nil

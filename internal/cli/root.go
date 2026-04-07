@@ -23,10 +23,13 @@ var (
 	flagSQLite    bool
 	flagSSHConfig bool
 	flagBoth      bool
+
+	appVersion string
 )
 
 // Execute builds and runs the root command.
 func Execute(version string) {
+	appVersion = version
 	root := newRootCmd(version)
 	if err := root.Execute(); err != nil {
 		errMsg("%s", err)
@@ -104,8 +107,8 @@ func persistentPreRun(cmd *cobra.Command, args []string) error {
 			runtimeCfg.ParseMode = model.ParseModeSSHConfigOnly
 		case flagBoth:
 			runtimeCfg.ParseMode = model.ParseModeBoth
-			runtimeCfg.BothMode = model.BothModeSeparate
 			runtimeCfg.DefaultSaveTarget = model.SaveTargetSQLite
+			runtimeCfg.BothViewMode = model.SourceSQLite
 		}
 		return nil
 	}
@@ -120,7 +123,7 @@ func persistentPreRun(cmd *cobra.Command, args []string) error {
 		if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
 			return nil
 		}
-		cfg = tui.RunConfigDialog()
+		cfg = tui.RunConfigDialog(appVersion)
 		if cfg == nil {
 			fmt.Println("Setup cancelled.")
 			os.Exit(0)

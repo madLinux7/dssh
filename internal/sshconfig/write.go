@@ -57,7 +57,7 @@ func Update(path string, oldName string, conn *model.Connection) error {
 
 	start, end, found := findBlockBounds(lines, oldName)
 	if !found {
-		return fmt.Errorf("%w: %q", ErrNotFound, oldName)
+		return fmt.Errorf("%w: %q in %s — was the file edited manually?", ErrNotFound, oldName, path)
 	}
 
 	// If name changed, check the new name doesn't already exist
@@ -91,7 +91,7 @@ func Delete(path string, name string) error {
 
 	start, end, found := findBlockBounds(lines, name)
 	if !found {
-		return fmt.Errorf("%w: %q", ErrNotFound, name)
+		return fmt.Errorf("%w: %q in %s — was the file edited manually?", ErrNotFound, name, path)
 	}
 
 	// Also consume one trailing blank line if present
@@ -203,7 +203,7 @@ func readLines(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: %s", ErrConfigNotFound, path)
+			return nil, fmt.Errorf("%w: %s — Use 'dssh config' to reconfigure", ErrConfigNotFound, path)
 		}
 		return nil, err
 	}

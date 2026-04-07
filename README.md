@@ -7,9 +7,11 @@
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
-The only SSH connection management tool you'll ever need. No dependencies, no more editing `/etc/hosts`.
+The only SSH connection management tool you'll ever need. **TUI & CLI**. No dependencies, no more file editing.
 
-Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-platform for every CLI.
+Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-platform.
+
+Store connections in **SQLite**, your **ssh_config** file, or **both** — your choice.
 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
@@ -32,6 +34,7 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 
 - [Features](#features)
 - [How it works](#how-it-works)
+- [Connection Modes](#connection-modes)
 - [Usage](#usage)
   - [Command Reference](#command-reference)
   - [TUI Navigation](#tui-navigation)
@@ -43,6 +46,7 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
   - [Delete (TUI)](#delete-tui)
   - [List connections (CLI)](#list-connections-cli)
   - [Remove a connection (CLI)](#remove-a-connection-cli)
+  - [Configure mode](#configure-mode)
   - [Reset everything](#reset-everything)
 - [Installation](#installation)
   - [Install & Update script (recommended)](#install--update-script-recommended)
@@ -63,6 +67,7 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 
 Also:
 
+- **Multiple storage backends** 🗄️ — use SQLite (`~/.dssh/dssh.db`), your `ssh_config` file, or both
 - **Launch into a directory** 📂 — optionally land in a specific remote directory on connect
 - **Password encryption** 🔒 — AES-256-GCM + Argon2id, protected by a master passphrase
 - **Cross-platform** 💻 — Linux, macOS, Windows, FreeBSD (amd64 + arm64)
@@ -74,8 +79,29 @@ dssh is a thin wrapper around your system's `ssh` binary:
 
 - **Key auth** — `syscall.Exec` replaces the dssh process with ssh (zero overhead, full terminal control)
 - **Password auth** — ssh runs as a child process with `SSH_ASKPASS` to supply the decrypted password (no `sshpass` needed)
-- **Data** — connections stored in SQLite at `~/.dssh/dssh.db`, no config files
+- **Data** — connections stored in SQLite (`~/.dssh/dssh.db`), your `ssh_config` file, or both
 - **Crypto** — AES-256-GCM encryption with Argon2id key derivation for stored passwords
+
+## Connection Modes
+
+On first launch, dssh asks you to choose a connection mode:
+
+| Mode | Description |
+|---|---|
+| **SQLite only** | Connections stored in `~/.dssh/dssh.db` (default) |
+| **ssh_config only** | Connections read from and written to your `ssh_config` file |
+| **Both** | Use SQLite and ssh_config side by side, toggle with `CTRL+L` |
+
+When using **ssh_config** or **both**, you pick a destination file:
+- **Main file** — `~/.ssh/config`
+- **Directive** — `~/.ssh/config.d/dssh`
+- **Custom path** — any file you choose
+
+If the file doesn't exist, dssh offers to create it for you.
+
+Change your mode anytime with `dssh config`. View current settings with `dssh config get` (or `dssh config show`).
+
+> **Note:** Password auth is only available when saving to SQLite. ssh_config entries always use key auth.
 
 ## Usage
 
@@ -92,6 +118,8 @@ dssh is a thin wrapper around your system's `ssh` binary:
 | `dssh create` / `dssh new` | Interactive form to create a connection |
 | `dssh edit` | Edit an existing connection |
 | `dssh delete` | Delete a connection (TUI, triple-confirm) |
+| `dssh config` | Configure connection mode (SQLite / ssh_config / both) |
+| `dssh config get` / `dssh config show` | Show current configuration |
 | `dssh reset` | Delete all data (double confirmation) |
 | `dssh --version` | Print version |
 
@@ -102,6 +130,8 @@ dssh is a thin wrapper around your system's `ssh` binary:
 | `Tab` / `Shift+Tab` | Switch between tabs |
 | `↑` / `↓` | Navigate lists |
 | `Enter` | Select / confirm |
+| `Ctrl+L` | Toggle SQLite / ssh_config list (both mode) |
+| `Ctrl+T` | Toggle key / password auth (create/edit) |
 | `ESC` / `Q` | Quit |
 
 ### Quick start - Let's Go!
@@ -207,6 +237,29 @@ dssh rm myserver
 ```
 Remove a connection instantly. No confirmation asked.
 
+### Configure mode
+
+Switch between SQLite, ssh_config, or both at any time.
+
+```bash
+dssh config
+```
+
+![dssh config](demo_config.gif)
+
+View current settings:
+
+```bash
+dssh config get
+```
+
+```
+parse_mode:                      both
+ssh_config_parse_destination:    ~/.ssh/config.d/dssh
+parse_both_view_mode:            sqlite
+parse_both_default_save_target:  sqlite
+```
+
 ### Reset everything
 
 Wipe all saved connections, encrypted passwords, and settings (deletes the SQLite database). Requires two confirmations to prevent accidents.
@@ -223,7 +276,7 @@ All data has been reset
 
 ## Installation
 
-### Install & Update script (recommended)
+### Install & Update script (recommended for now)
 
 **Linux / macOS / FreeBSD:**
 
