@@ -3,6 +3,8 @@
 package cli
 
 import (
+	"database/sql"
+	"fmt"
 	"os"
 
 	"github.com/madLinux7/dssh/internal/db"
@@ -10,6 +12,17 @@ import (
 	"github.com/madLinux7/dssh/internal/ssh"
 	"github.com/madLinux7/dssh/internal/tui"
 	"github.com/spf13/cobra"
+)
+
+// Package-level shared state — initialised in PersistentPreRunE.
+var (
+	sharedDB   *sql.DB
+	runtimeCfg *model.RuntimeConfig
+
+	// Flag overrides (one-shot, not persisted).
+	flagSQLite    bool
+	flagSSHConfig bool
+	flagBoth      bool
 )
 
 // Execute builds and runs the root command.
@@ -33,6 +46,8 @@ func newRootCmd(version string) *cobra.Command {
 		DisableFlagParsing: false,
 		SilenceUsage:       true,
 		SilenceErrors:      true,
+		PersistentPreRunE:  persistentPreRun,
+		PersistentPostRunE: persistentPostRun,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Split args at "--" to get connection name and extra ssh args.
 			name, extraArgs := splitArgs(args)
@@ -47,6 +62,11 @@ func newRootCmd(version string) *cobra.Command {
 	// Allow unknown flags to pass through after --.
 	root.Flags().SetInterspersed(false)
 
+	// Mode override flags (one-shot, not persisted).
+	root.PersistentFlags().BoolVar(&flagSQLite, "sqlite", false, "use SQLite mode for this session")
+	root.PersistentFlags().BoolVar(&flagSSHConfig, "sshconfig", false, "use ssh_config mode for this session")
+	root.PersistentFlags().BoolVar(&flagBoth, "both", false, "use both mode for this session")
+
 	root.AddCommand(
 		newAddCmd(),
 		newRmCmd(),
@@ -55,9 +75,71 @@ func newRootCmd(version string) *cobra.Command {
 		newEditCmd(),
 		newDeleteCmd(),
 		newResetCmd(),
+		newConfigCmd(),
 	)
 
 	return root
+}
+
+// persistentPreRun opens the DB and loads (or bootstraps) the runtime config.
+func persistentPreRun(cmd *cobra.Command, args []string) error {
+	// Reset command manages the DB file itself — skip shared setup.
+	if cmd.Name() == "reset" {
+		return nil
+	}
+
+	d, err := db.Open()
+	if err != nil {
+		return err
+	}
+	sharedDB = d
+
+	// Check flag overrides.
+	if flagSQLite || flagSSHConfig || flagBoth {
+		runtimeCfg = &model.RuntimeConfig{FlagOverride: true}
+		switch {
+		case flagSQLite:
+			runtimeCfg.ParseMode = model.ParseModeSQLiteOnly
+		case flagSSHConfig:
+			runtimeCfg.ParseMode = model.ParseModeSSHConfigOnly
+		case flagBoth:
+			runtimeCfg.ParseMode = model.ParseModeBoth
+			runtimeCfg.BothMode = model.BothModeSeparate
+			runtimeCfg.DefaultSaveTarget = model.SaveTargetSQLite
+		}
+		return nil
+	}
+
+	cfg, err := loadRuntimeConfig(sharedDB)
+	if err != nil {
+		return err
+	}
+
+	if cfg == nil {
+		// First run — show config dialog (unless this IS the config command).
+		if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
+			return nil
+		}
+		cfg = tui.RunConfigDialog()
+		if cfg == nil {
+			fmt.Println("Setup cancelled.")
+			os.Exit(0)
+		}
+		if err := saveRuntimeConfig(sharedDB, cfg); err != nil {
+			return err
+		}
+	}
+
+	runtimeCfg = cfg
+	return nil
+}
+
+func persistentPostRun(cmd *cobra.Command, args []string) error {
+	if sharedDB != nil {
+		sharedDB.Close()
+		sharedDB = nil
+	}
+	return nil
 }
 
 func splitArgs(args []string) (string, []string) {
@@ -73,13 +155,7 @@ func splitArgs(args []string) (string, []string) {
 }
 
 func runPicker(extraArgs []string) error {
-	d, err := db.Open()
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-
-	conns, err := db.List(d)
+	conns, err := listConnections()
 	if err != nil {
 		return err
 	}
@@ -89,7 +165,7 @@ func runPicker(extraArgs []string) error {
 		initialTab = tui.TabCreate
 	}
 
-	result := tui.Run(conns, d, initialTab)
+	result := tui.Run(conns, sharedDB, initialTab, runtimeCfg)
 	if result == nil {
 		return nil
 	}
@@ -98,23 +174,16 @@ func runPicker(extraArgs []string) error {
 	case tui.ActionConnect:
 		return connect(result.Connection, extraArgs)
 	case tui.ActionCreated:
-		return savePasswordAuth(d, result.WizardResult)
+		return savePasswordAuth(sharedDB, result.WizardResult)
 	}
 	return nil
 }
 
 func connectByName(name string, extraArgs []string) error {
-	d, err := db.Open()
+	conn, err := getConnectionByName(name)
 	if err != nil {
 		return err
 	}
-	defer d.Close()
-
-	conn, err := db.GetByName(d, name)
-	if err != nil {
-		return err
-	}
-
 	return connect(conn, extraArgs)
 }
 
@@ -130,16 +199,9 @@ func connect(conn *model.Connection, extraArgs []string) error {
 }
 
 func connectPassword(conn *model.Connection, extraArgs []string) error {
-	d, err := db.Open()
+	password, err := decryptPassword(sharedDB, conn)
 	if err != nil {
 		return err
 	}
-	defer d.Close()
-
-	password, err := decryptPassword(d, conn)
-	if err != nil {
-		return err
-	}
-
 	return ssh.ConnectWithPassword(conn, password, extraArgs)
 }

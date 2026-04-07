@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/sshconfig"
 )
 
 // confirmExpiredMsg resets the confirmation sequence after a timeout.
@@ -30,6 +31,7 @@ type DeleteModel struct {
 	confirmTarget     int64
 	confirmCount      int
 	confirmGeneration int
+	sshConfigTarget   model.SSHConfigTarget
 	lastDeleted       string // set after successful deletion, read + cleared by app model
 	statusMsg         string
 	statusStyle       lipgloss.Style
@@ -102,9 +104,20 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 
 			m.confirmCount++
 			if m.confirmCount >= 3 {
-				// Confirmed — delete.
-				if err := db.Delete(m.database, item.conn.Name); err != nil {
-					m.statusMsg = fmt.Sprintf("Error: %s", err)
+				// Confirmed — delete from the appropriate source.
+				var delErr error
+				if item.conn.Source == model.SourceSSHConfig {
+					p, err := sshconfig.FilePath(m.sshConfigTarget)
+					if err != nil {
+						delErr = err
+					} else {
+						delErr = sshconfig.Delete(p, item.conn.Name)
+					}
+				} else {
+					delErr = db.Delete(m.database, item.conn.Name)
+				}
+				if delErr != nil {
+					m.statusMsg = fmt.Sprintf("Error: %s", delErr)
 					m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 				} else {
 					m.lastDeleted = item.conn.Name
@@ -223,6 +236,16 @@ func (m *DeleteModel) SetSize(w, h int) {
 // AddItem inserts a connection in ascending alphabetical position.
 func (m *DeleteModel) AddItem(conn model.Connection) {
 	m.allItems = insertItemSorted(m.allItems, conn)
+	m.applyFilter()
+}
+
+// SetItems replaces the full connection list (used for source toggling).
+func (m *DeleteModel) SetItems(items []connectionItem) {
+	listItems := make([]list.Item, len(items))
+	for i, ci := range items {
+		listItems[i] = ci
+	}
+	m.allItems = listItems
 	m.applyFilter()
 }
 
