@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/madLinux7/dssh/internal/model"
 )
 
 const (
@@ -24,7 +25,10 @@ type CreateModel struct {
 	inputs   [fieldCount]textinput.Model
 	focused  int
 	authType string // "key" or "password"
+	saveTo   model.SaveTarget // only relevant when cfg.ParseMode == "both"
+	atSaveTo bool             // cursor is on Save To toggle
 	atSave   bool
+	cfg      *model.RuntimeConfig
 	width    int
 	height   int
 }
@@ -76,6 +80,7 @@ func newCreateModel(width, height int) CreateModel {
 		inputs:   inputs,
 		focused:  fieldName,
 		authType: "key",
+		saveTo:   model.SaveTargetSQLite,
 		width:    width,
 		height:   height,
 	}
@@ -90,7 +95,17 @@ func (m CreateModel) reset() CreateModel {
 	m.inputs[fieldIdentityFile].SetValue("default")
 	m.focused = fieldName
 	m.atSave = false
+	m.atSaveTo = false
 	m.authType = "key"
+	if m.cfg != nil {
+		m.saveTo = m.cfg.DefaultSaveTarget
+	} else {
+		m.saveTo = model.SaveTargetSQLite
+	}
+	// In ssh_config_only mode, force key auth.
+	if m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly {
+		m.authType = "key"
+	}
 	m = m.updateFocus()
 	return m
 }
@@ -110,37 +125,68 @@ func (m CreateModel) visibleFields() []int {
 	return fields
 }
 
-func (m CreateModel) nextField() (int, bool) {
+// showSaveTo returns true when the Save To toggle should be visible.
+func (m CreateModel) showSaveTo() bool {
+	return m.cfg != nil && m.cfg.ParseMode == model.ParseModeBoth
+}
+
+func (m CreateModel) nextField() (CreateModel, bool) {
 	if m.atSave {
-		return m.focused, true
+		return m, true
+	}
+	if m.atSaveTo {
+		m.atSaveTo = false
+		m.atSave = true
+		return m, true
 	}
 	fields := m.visibleFields()
 	for i, f := range fields {
 		if f == m.focused {
 			if i+1 < len(fields) {
-				return fields[i+1], false
+				m.focused = fields[i+1]
+				return m, false
 			}
-			return m.focused, true // move to save button
+			// Past last text field — go to Save To or Save button.
+			if m.showSaveTo() {
+				m.atSaveTo = true
+				return m, false
+			}
+			m.atSave = true
+			return m, true
 		}
 	}
-	return m.focused, m.atSave
+	return m, m.atSave
 }
 
-func (m CreateModel) prevField() (int, bool) {
+func (m CreateModel) prevField() (CreateModel, bool) {
 	if m.atSave {
+		if m.showSaveTo() {
+			m.atSave = false
+			m.atSaveTo = true
+			return m, false
+		}
 		fields := m.visibleFields()
-		return fields[len(fields)-1], false
+		m.atSave = false
+		m.focused = fields[len(fields)-1]
+		return m, false
+	}
+	if m.atSaveTo {
+		m.atSaveTo = false
+		fields := m.visibleFields()
+		m.focused = fields[len(fields)-1]
+		return m, false
 	}
 	fields := m.visibleFields()
 	for i, f := range fields {
 		if f == m.focused {
 			if i > 0 {
-				return fields[i-1], false
+				m.focused = fields[i-1]
+				return m, false
 			}
-			return m.focused, false
+			return m, false
 		}
 	}
-	return m.focused, false
+	return m, false
 }
 
 func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
@@ -151,25 +197,36 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 			return m, &AppResult{Action: ActionNone}, nil
 
 		case "down":
-			next, save := m.nextField()
-			m.focused = next
-			m.atSave = save
+			m, _ = m.nextField()
 			m = m.updateFocus()
 			return m, nil, nil
 
 		case "up":
-			prev, save := m.prevField()
-			m.focused = prev
-			m.atSave = save
+			m, _ = m.prevField()
 			m = m.updateFocus()
 			return m, nil, nil
 
+		case "left", "right":
+			// Toggle Save To when focused on it.
+			if m.atSaveTo {
+				m = m.toggleSaveTo()
+				return m, nil, nil
+			}
+
 		case "ctrl+t":
+			// Don't allow toggling to password when in ssh_config_only mode.
+			if m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly {
+				return m, nil, nil
+			}
 			if m.authType == "key" {
 				m.authType = "password"
 				if m.focused == fieldIdentityFile {
 					m.focused = fieldPassword
 					m = m.updateFocus()
+				}
+				// In both mode: password forces Save To = SQLite.
+				if m.showSaveTo() {
+					m.saveTo = model.SaveTargetSQLite
 				}
 			} else {
 				m.authType = "key"
@@ -181,7 +238,17 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 			return m, nil, nil
 
 		case "enter":
+			if m.atSaveTo {
+				m = m.toggleSaveTo()
+				return m, nil, nil
+			}
 			if m.atSave {
+				saveTo := m.saveTo
+				if m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly {
+					saveTo = model.SaveTargetSSHConfig
+				} else if m.cfg != nil && m.cfg.ParseMode == model.ParseModeSQLiteOnly {
+					saveTo = model.SaveTargetSQLite
+				}
 				return m, &AppResult{
 					Action: ActionCreated,
 					WizardResult: &WizardResult{
@@ -193,18 +260,17 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 						AuthType:     m.authType,
 						IdentityFile: m.inputs[fieldIdentityFile].Value(),
 						Password:     m.inputs[fieldPassword].Value(),
+						SaveTo:       saveTo,
 					},
 				}, nil
 			}
-			next, save := m.nextField()
-			m.focused = next
-			m.atSave = save
+			m, _ = m.nextField()
 			m = m.updateFocus()
 			return m, nil, nil
 		}
 	}
 
-	if !m.atSave {
+	if !m.atSave && !m.atSaveTo {
 		var cmd tea.Cmd
 		m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
 		return m, nil, cmd
@@ -212,9 +278,26 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 	return m, nil, nil
 }
 
+func (m CreateModel) toggleSaveTo() CreateModel {
+	if m.saveTo == model.SaveTargetSQLite {
+		// Don't allow ssh_config when password auth is selected.
+		if m.authType == "password" {
+			return m
+		}
+		m.saveTo = model.SaveTargetSSHConfig
+	} else {
+		m.saveTo = model.SaveTargetSQLite
+	}
+	// If saving to ssh_config, lock auth to key.
+	if m.saveTo == model.SaveTargetSSHConfig && m.authType == "password" {
+		m.authType = "key"
+	}
+	return m
+}
+
 func (m CreateModel) updateFocus() CreateModel {
 	for i := range m.inputs {
-		if i == m.focused && !m.atSave {
+		if i == m.focused && !m.atSave && !m.atSaveTo {
 			m.inputs[i].Focus()
 			m.inputs[i].PromptStyle = focusedFieldStyle
 			m.inputs[i].TextStyle = focusedFieldStyle
@@ -241,9 +324,45 @@ func (m CreateModel) View() string {
 	}
 
 	b.WriteString("\n")
+
+	// Auth Type line.
 	authLabel := labelStyle.Render("Auth Type")
 	authHint := blurredFieldStyle.Render("  (ctrl+t to toggle)")
-	b.WriteString(fmt.Sprintf("%s %s%s\n\n", authLabel, focusedFieldStyle.Render(m.authType), authHint))
+	isSSHConfigOnly := m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly
+	if isSSHConfigOnly {
+		authHint = statusStyle.Render("  (locked: no passwords in ssh_config mode)")
+	}
+	b.WriteString(fmt.Sprintf("%s %s%s\n", authLabel, focusedFieldStyle.Render(m.authType), authHint))
+
+	// Save To (only in "both" mode).
+	if m.showSaveTo() {
+		b.WriteString("\n")
+		saveLabel := labelStyle.Render("Save To")
+		pad := labelStyle.Render("")
+
+		sqliteRadio, sshRadio := "○", "○"
+		sqliteStyle, sshStyle := blurredFieldStyle, blurredFieldStyle
+		if m.saveTo == model.SaveTargetSQLite {
+			sqliteRadio = "●"
+			sqliteStyle = focusedFieldStyle
+		} else {
+			sshRadio = "●"
+			sshStyle = focusedFieldStyle
+		}
+		if m.atSaveTo {
+			sqliteStyle = focusedFieldStyle
+			sshStyle = focusedFieldStyle
+		}
+
+		hint := ""
+		if m.authType == "password" {
+			hint = statusStyle.Render("  (locked: passwords only in SQLite)")
+		}
+		b.WriteString(fmt.Sprintf("%s %s %s%s\n", saveLabel, sqliteStyle.Render(sqliteRadio), sqliteStyle.Render("SQLite"), hint))
+		b.WriteString(fmt.Sprintf("%s %s %s\n", pad, sshStyle.Render(sshRadio), sshStyle.Render("ssh_config")))
+	}
+
+	b.WriteString("\n")
 
 	if m.atSave {
 		b.WriteString(focusedFieldStyle.Render("[ Save ]"))
@@ -252,7 +371,8 @@ func (m CreateModel) View() string {
 	}
 
 	b.WriteString("\n\n")
-	b.WriteString(statusStyle.Render("esc: cancel  |  up/down: navigate  |  ctrl+t: toggle auth  |  enter: next/save"))
+	hints := "esc: cancel  |  up/down: navigate  |  ctrl+t: toggle auth  |  enter: next/save"
+	b.WriteString(statusStyle.Render(hints))
 
 	return b.String()
 }

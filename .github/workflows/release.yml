@@ -33,7 +33,6 @@ jobs:
             "darwin/amd64"
             "darwin/arm64"
             "windows/amd64"
-            "windows/arm64"
             "freebsd/amd64"
             "freebsd/arm64"
           )
@@ -43,7 +42,7 @@ jobs:
             GOARCH="${target#*/}"
             output="dist/dssh-${GOOS}-${GOARCH}"
             if [ "$GOOS" = "windows" ]; then
-              output="${output}.exe"
+              output="dist/dssh.exe"
             fi
             echo "Building ${GOOS}/${GOARCH}..."
             CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
