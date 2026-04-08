@@ -1,29 +1,22 @@
 package cli
 
 import (
-	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/tui"
 	"github.com/spf13/cobra"
 )
 
 func newDeleteCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "delete",
+		Use:     "delete",
 		Short:   "Interactive delete for saved connections",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			d, err := db.Open()
-			if err != nil {
-				return err
-			}
-			defer d.Close()
-
-			conns, err := db.List(d)
+			conns, err := listConnections()
 			if err != nil {
 				return err
 			}
 
-			result := tui.Run(conns, d, tui.TabDelete)
+			result := tui.Run(conns, sharedDB, tui.TabDelete, runtimeCfg)
 			if result == nil || result.Action == tui.ActionNone {
 				return nil
 			}
@@ -32,7 +25,7 @@ func newDeleteCmd() *cobra.Command {
 			case tui.ActionConnect:
 				return connect(result.Connection, nil)
 			case tui.ActionCreated:
-				return savePasswordAuth(d, result.WizardResult)
+				return savePasswordAuth(sharedDB, result.WizardResult)
 			}
 			return nil
 		},

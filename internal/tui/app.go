@@ -21,6 +21,7 @@ import (
 	"github.com/madLinux7/dssh/internal/crypto"
 	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/sshconfig"
 )
 
 // Tab identifies a tab in the TUI.
@@ -38,15 +39,22 @@ type AppModel struct {
 	activeTab      Tab
 	tabs           []string
 	connectModel   ConnectModel
-	createModel       CreateModel
+	createModel    CreateModel
 	editModel      EditModel
 	deleteModel    DeleteModel
 	database       *sql.DB
+	cfg            *model.RuntimeConfig
 	result         *AppResult
 	statusMsg      string
 	statusMsgStyle lipgloss.Style
+	statusMsgRight bool // render status right-aligned
 	width          int
 	height         int
+
+	// Dual-list state for both/separate mode.
+	activeSource   model.Source // current visible source in separate mode
+	sqliteConns    []model.Connection
+	sshConfigConns []model.Connection
 
 	// Passphrase modal state.
 	showModal     bool
@@ -56,7 +64,7 @@ type AppModel struct {
 }
 
 // Run launches the TUI and returns the user's action.
-func Run(connections []model.Connection, d *sql.DB, initialTab Tab) *AppResult {
+func Run(connections []model.Connection, d *sql.DB, initialTab Tab, cfg *model.RuntimeConfig) *AppResult {
 	// Sort connections ascending (A→Z).
 	sort.Slice(connections, func(i, j int) bool {
 		return strings.ToLower(connections[i].Name) < strings.ToLower(connections[j].Name)
@@ -71,10 +79,52 @@ func Run(connections []model.Connection, d *sql.DB, initialTab Tab) *AppResult {
 		activeTab:    initialTab,
 		tabs:         []string{"Create", "Connect", "Edit", "Delete"},
 		connectModel: newConnectModel(connections, 80, 20),
-		createModel:     newCreateModel(80, 20),
+		createModel:  newCreateModel(80, 20),
 		editModel:    newEditModel(connItems, d, 80, 20),
 		deleteModel:  newDeleteModel(connItems, d, 80, 20),
 		database:     d,
+		cfg:          cfg,
+		activeSource: model.SourceSQLite,
+	}
+
+	// Respect persisted view mode.
+	if cfg != nil && cfg.BothViewMode == model.SourceSSHConfig {
+		m.activeSource = model.SourceSSHConfig
+	}
+
+	// Pass config to sub-models that need it.
+	m.createModel.cfg = cfg
+	if cfg != nil {
+		m.createModel.saveTo = cfg.DefaultSaveTarget
+		m.editModel.sshConfigDest = cfg.SSHConfigDest
+		m.deleteModel.sshConfigDest = cfg.SSHConfigDest
+	}
+
+	// In "both" mode, split connections by source for CTRL+L toggling
+	// Show only the active source's connections.
+	if cfg != nil && cfg.ParseMode == model.ParseModeBoth {
+		for _, c := range connections {
+			switch c.Source {
+			case model.SourceSSHConfig:
+				m.sshConfigConns = append(m.sshConfigConns, c)
+			default:
+				m.sqliteConns = append(m.sqliteConns, c)
+			}
+		}
+		// Filter sub-models to only show the active source.
+		var visible []model.Connection
+		if m.activeSource == model.SourceSSHConfig {
+			visible = m.sshConfigConns
+		} else {
+			visible = m.sqliteConns
+		}
+		visibleItems := make([]connectionItem, len(visible))
+		for i, c := range visible {
+			visibleItems[i] = connectionItem{conn: c}
+		}
+		m.connectModel.SetItems(visible)
+		m.editModel.SetItems(visibleItems)
+		m.deleteModel.SetItems(visibleItems)
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -98,8 +148,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Content box: Width(w-4) includes padding (2×2), text area = w-4-4 = w-8.
-		contentWidth := m.width - 8
+		// Content box: Width(w-2) includes padding (2×2), text area = w-2-4 = w-6.
+		contentWidth := m.width - 6
 		// Title(3) + filter(3) + gap(1) + status(1) = 8 lines of overhead.
 		subModelHeight := m.height - 8
 		if subModelHeight < 1 {
@@ -146,16 +196,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			m.result = &AppResult{Action: ActionNone}
 			return m, tea.Quit
+		case "ctrl+l":
+			if m.cfg != nil && m.cfg.ParseMode == model.ParseModeBoth && !m.editModel.editing {
+				m = m.toggleSource()
+				return m, nil
+			}
 		case "tab":
 			if !m.editModel.editing {
 				m.activeTab = Tab((int(m.activeTab) + 1) % len(m.tabs))
 				m.statusMsg = ""
+				m.deleteModel.ResetConfirm()
 				return m, nil
 			}
 		case "shift+tab":
 			if !m.editModel.editing {
 				m.activeTab = Tab((int(m.activeTab) - 1 + len(m.tabs)) % len(m.tabs))
 				m.statusMsg = ""
+				m.deleteModel.ResetConfirm()
 				return m, nil
 			}
 		}
@@ -193,9 +250,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.editModel.lastEdited != nil {
 			info := m.editModel.lastEdited
 			m.editModel.lastEdited = nil
-			m.onConnectionEdited(info.oldName, info.newName)
-			m.statusMsg = fmt.Sprintf("%q updated", info.newName)
-			m.statusMsgStyle = successStyle
+			m.onConnectionEdited(info.oldName, info.newName, info.source)
+			m.setStatus(fmt.Sprintf("%q updated", info.newName), successStyle)
 		}
 		if result != nil {
 			switch result.Action {
@@ -214,8 +270,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connectModel.RemoveByName(name)
 			m.editModel.RemoveByName(name)
 			m.deleteModel.lastDeleted = ""
-			m.statusMsg = fmt.Sprintf("%q deleted", name)
-			m.statusMsgStyle = successStyle
+			m.setStatus(fmt.Sprintf("%q deleted", name), successStyle)
+		}
+		// Clear app-level status when delete tab shows its own confirmation text.
+		if m.deleteModel.statusMsg != "" && m.statusMsg != "" {
+			m.statusMsg = ""
 		}
 		if result != nil {
 			m.result = result
@@ -285,26 +344,86 @@ func (m AppModel) handleSave(wr *WizardResult) (AppModel, tea.Cmd) {
 		conn.IdentityFile = expandTildeTUI(wr.IdentityFile)
 	}
 
-	if err := db.Insert(m.database, conn); err != nil {
+	if err := m.insertConnection(conn, wr.SaveTo); err != nil {
 		m.setError("%s", err)
 		return m, nil
 	}
 
-	m.onConnectionSaved(conn.Name)
+	m.onConnectionSaved(conn.Name, wr.SaveTo)
 	return m, nil
+}
+
+// insertConnection saves to the appropriate backend based on the save target.
+func (m AppModel) insertConnection(conn *model.Connection, target model.SaveTarget) error {
+	saveToSSH := target == model.SaveTargetSSHConfig ||
+		(m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly)
+
+	if saveToSSH {
+		p, err := m.sshConfigPath()
+		if err != nil {
+			return err
+		}
+		conn.Source = model.SourceSSHConfig
+		return sshconfig.Insert(p, conn)
+	}
+	conn.Source = model.SourceSQLite
+	return db.Insert(m.database, conn)
+}
+
+// sshConfigPath returns the ssh_config file path based on the current config.
+func (m AppModel) sshConfigPath() (string, error) {
+	if m.cfg == nil || m.cfg.SSHConfigDest == "" {
+		return sshconfig.MainFilePath()
+	}
+	return m.cfg.SSHConfigDest, nil
 }
 
 // onConnectionSaved updates the Connect/Delete lists and resets the New form
 // after a connection is successfully persisted.
-func (m *AppModel) onConnectionSaved(name string) {
-	saved, _ := db.GetByName(m.database, name)
-	if saved != nil {
-		m.connectModel.AddItem(*saved)
-		m.editModel.AddItem(*saved)
-		m.deleteModel.AddItem(*saved)
+func (m *AppModel) onConnectionSaved(name string, target model.SaveTarget) {
+	// Update default save target so the next create defaults to what was just used.
+	if m.cfg != nil && m.cfg.ParseMode == model.ParseModeBoth {
+		m.cfg.DefaultSaveTarget = target
+		if m.database != nil {
+			_ = db.SetSetting(m.database, "parse_both_default_save_target", []byte(target))
+		}
 	}
-	m.statusMsg = fmt.Sprintf("%q added", name)
-	m.statusMsgStyle = successStyle
+
+	var saved *model.Connection
+
+	saveToSSH := target == model.SaveTargetSSHConfig ||
+		(m.cfg != nil && m.cfg.ParseMode == model.ParseModeSSHConfigOnly)
+
+	if saveToSSH {
+		p, _ := m.sshConfigPath()
+		saved, _ = sshconfig.GetByName(p, name)
+	} else {
+		saved, _ = db.GetByName(m.database, name)
+		if saved != nil {
+			saved.Source = model.SourceSQLite
+		}
+	}
+
+	if saved != nil {
+		// In "both" mode, update caches and only add to visible lists if matching active source.
+		if m.cfg != nil && m.cfg.ParseMode == model.ParseModeBoth {
+			if saved.Source == model.SourceSSHConfig {
+				m.sshConfigConns = append(m.sshConfigConns, *saved)
+			} else {
+				m.sqliteConns = append(m.sqliteConns, *saved)
+			}
+			if saved.Source == m.activeSource {
+				m.connectModel.AddItem(*saved)
+				m.editModel.AddItem(*saved)
+				m.deleteModel.AddItem(*saved)
+			}
+		} else {
+			m.connectModel.AddItem(*saved)
+			m.editModel.AddItem(*saved)
+			m.deleteModel.AddItem(*saved)
+		}
+	}
+	m.setStatus(fmt.Sprintf("%q added", name), successStyle)
 	m.createModel = m.createModel.reset()
 }
 
@@ -361,14 +480,14 @@ func (m AppModel) finalizePasswordSave(passphrase string) AppModel {
 		conn.PassNonce = nonce
 	}
 
-	if err := db.Insert(m.database, conn); err != nil {
+	if err := m.insertConnection(conn, wr.SaveTo); err != nil {
 		m.setError("%s", err)
 		m.pendingWizard = nil
 		return m
 	}
 
 	m.pendingWizard = nil
-	m.onConnectionSaved(conn.Name)
+	m.onConnectionSaved(conn.Name, wr.SaveTo)
 	return m
 }
 
@@ -455,10 +574,26 @@ func (m AppModel) View() string {
 		tabBotParts = append(tabBotParts, lines[1])
 		tabWidths = append(tabWidths, lipgloss.Width(lines[0]))
 	}
-	tabBar := strings.Join(tabTopParts, " ") + "\n" + strings.Join(tabBotParts, " ")
+	tabTopLine := strings.Join(tabTopParts, " ")
+	tabBotLine := strings.Join(tabBotParts, " ")
+
+	// Mode indicator in top-right corner.
+	if m.cfg != nil {
+		label := model.ParseModeLabel(m.cfg.ParseMode)
+		modeStyle := lipgloss.NewStyle().Foreground(dimGray)
+		modeStr := modeStyle.Render(label)
+		tabTopWidth := lipgloss.Width(tabTopLine)
+		modeWidth := lipgloss.Width(modeStr)
+		gap := m.width - tabTopWidth - modeWidth - 1
+		if gap > 0 {
+			tabBotLine += strings.Repeat(" ", gap) + modeStr
+		}
+	}
+
+	tabBar := tabTopLine + "\n" + tabBotLine
 
 	// Connecting line: merges tab bottoms with content box top border.
-	contentBoxWidth := m.width - 2 // content inner width + left/right borders
+	contentBoxWidth := m.width // total rendered width of the content box
 	var conn strings.Builder
 	pos := 0
 	for i, w := range tabWidths {
@@ -510,21 +645,29 @@ func (m AppModel) View() string {
 		contentHeight = 2
 	}
 
-	// Pad content so the status line sits at the very bottom.
+	// Bottom status line.
 	contentLines := lipgloss.Height(content)
-	padNeeded := contentHeight - contentLines - 1
-	if padNeeded > 0 {
-		content += strings.Repeat("\n", padNeeded)
-	}
-
-	// Status line (last line inside the box).
 	if m.statusMsg != "" {
-		content += "\n" + m.statusMsgStyle.Render(m.statusMsg)
+		padNeeded := contentHeight - contentLines - 1
+		if padNeeded > 0 {
+			content += strings.Repeat("\n", padNeeded)
+		}
+		styled := m.statusMsgStyle.Render(m.statusMsg)
+		if m.statusMsgRight {
+			innerWidth := m.width - 6
+			gap := innerWidth - lipgloss.Width(styled)
+			if gap < 0 {
+				gap = 0
+			}
+			content += "\n" + strings.Repeat(" ", gap) + styled
+		} else {
+			content += "\n" + styled
+		}
 	}
 
 	contentBox := contentStyle.
 		BorderForeground(accentColor).
-		Width(m.width - 4).
+		Width(m.width - 2).
 		Height(contentHeight).
 		Render(content)
 
@@ -536,12 +679,21 @@ func (m AppModel) View() string {
 }
 
 // onConnectionEdited syncs all tab lists after an edit.
-func (m *AppModel) onConnectionEdited(oldName, newName string) {
+func (m *AppModel) onConnectionEdited(oldName, newName string, source model.Source) {
 	m.connectModel.RemoveByName(oldName)
 	m.editModel.RemoveByName(oldName)
 	m.deleteModel.RemoveByName(oldName)
 
-	saved, _ := db.GetByName(m.database, newName)
+	var saved *model.Connection
+	if source == model.SourceSSHConfig {
+		p, _ := m.sshConfigPath()
+		saved, _ = sshconfig.GetByName(p, newName)
+	} else {
+		saved, _ = db.GetByName(m.database, newName)
+		if saved != nil {
+			saved.Source = model.SourceSQLite
+		}
+	}
 	if saved != nil {
 		m.connectModel.AddItem(*saved)
 		m.editModel.AddItem(*saved)
@@ -631,18 +783,67 @@ func (m AppModel) finalizeEditPasswordSave(passphrase string) AppModel {
 	}
 
 	m.editModel.editing = false
-	m.statusMsg = fmt.Sprintf("%q updated", wr.Name)
-	m.statusMsgStyle = successStyle
+	m.setStatus(fmt.Sprintf("%q updated", wr.Name), successStyle)
 	m.pendingWizard = nil
 	m.pendingEditID = 0
-	m.onConnectionEdited(oldName, wr.Name)
+	m.onConnectionEdited(oldName, wr.Name, m.editModel.origConn.Source)
 	return m
+}
+
+// toggleSource swaps the visible connection list between SQLite and ssh_config.
+func (m AppModel) toggleSource() AppModel {
+	if m.activeSource == model.SourceSQLite {
+		m.activeSource = model.SourceSSHConfig
+	} else {
+		m.activeSource = model.SourceSQLite
+	}
+
+	// Persist the new view mode.
+	if m.cfg != nil {
+		m.cfg.BothViewMode = m.activeSource
+	}
+	if m.database != nil {
+		_ = db.SetSetting(m.database, "parse_both_view_mode", []byte(m.activeSource))
+	}
+
+	var conns []model.Connection
+	if m.activeSource == model.SourceSQLite {
+		conns = m.sqliteConns
+	} else {
+		conns = m.sshConfigConns
+	}
+
+	items := make([]connectionItem, len(conns))
+	for i, c := range conns {
+		items[i] = connectionItem{conn: c}
+	}
+
+	m.connectModel.SetItems(conns)
+	m.editModel.SetItems(items)
+	m.deleteModel.SetItems(items)
+
+	src := "SQLite"
+	if m.activeSource == model.SourceSSHConfig {
+		src = "ssh_config"
+	}
+	m.statusMsg = fmt.Sprintf("Showing %s connections", src)
+	m.statusMsgStyle = statusStyle
+	m.statusMsgRight = true
+	return m
+}
+
+// setStatus sets the status bar with left alignment.
+func (m *AppModel) setStatus(msg string, style lipgloss.Style) {
+	m.statusMsg = msg
+	m.statusMsgStyle = style
+	m.statusMsgRight = false
 }
 
 // setError sets the status bar to an error message.
 func (m *AppModel) setError(format string, a ...any) {
 	m.statusMsg = fmt.Sprintf("Error: "+format, a...)
 	m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+	m.statusMsgRight = false
 }
 
 func expandTildeTUI(path string) string {

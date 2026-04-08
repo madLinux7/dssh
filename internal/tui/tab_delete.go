@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/sshconfig"
 )
 
 // confirmExpiredMsg resets the confirmation sequence after a timeout.
@@ -30,6 +31,7 @@ type DeleteModel struct {
 	confirmTarget     int64
 	confirmCount      int
 	confirmGeneration int
+	sshConfigDest     string
 	lastDeleted       string // set after successful deletion, read + cleared by app model
 	statusMsg         string
 	statusStyle       lipgloss.Style
@@ -90,21 +92,20 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 			if m.confirmTarget != item.conn.ID {
 				// New target — start confirmation sequence.
 				m.confirmTarget = item.conn.ID
-				m.confirmCount = 1
-				m.confirmGeneration++
-				gen := m.confirmGeneration
-				m.statusMsg = fmt.Sprintf("Press Enter 2 more times to delete %q", item.conn.Name)
-				m.statusStyle = lipgloss.NewStyle().Foreground(warnYellow).Bold(true)
-				return m, nil, tea.Tick(time.Second, func(time.Time) tea.Msg {
-					return confirmExpiredMsg{generation: gen}
-				})
+				m.confirmCount = 0
 			}
 
 			m.confirmCount++
 			if m.confirmCount >= 3 {
-				// Confirmed — delete.
-				if err := db.Delete(m.database, item.conn.Name); err != nil {
-					m.statusMsg = fmt.Sprintf("Error: %s", err)
+				// Confirmed — delete from the appropriate source.
+				var delErr error
+				if item.conn.Source == model.SourceSSHConfig {
+					delErr = sshconfig.Delete(m.sshConfigDest, item.conn.Name)
+				} else {
+					delErr = db.Delete(m.database, item.conn.Name)
+				}
+				if delErr != nil {
+					m.statusMsg = fmt.Sprintf("Error: %s", delErr)
 					m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 				} else {
 					m.lastDeleted = item.conn.Name
@@ -123,9 +124,21 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 				return m, nil, nil
 			}
 
-			m.statusMsg = fmt.Sprintf("Press Enter 1 more time to delete %q", item.conn.Name)
-			m.statusStyle = lipgloss.NewStyle().Foreground(warnOrange).Bold(true)
-			return m, nil, nil
+			// Show remaining presses and start a 1-second timer.
+			// Each press restarts the timer — if it expires, the sequence resets.
+			m.confirmGeneration++
+			gen := m.confirmGeneration
+			remaining := 3 - m.confirmCount
+			if remaining == 1 {
+				m.statusMsg = fmt.Sprintf("Press Enter 1 more time to delete %q", item.conn.Name)
+				m.statusStyle = lipgloss.NewStyle().Foreground(warnOrange).Bold(true)
+			} else {
+				m.statusMsg = fmt.Sprintf("Press Enter %d more times to delete %q", remaining, item.conn.Name)
+				m.statusStyle = lipgloss.NewStyle().Foreground(warnYellow).Bold(true)
+			}
+			return m, nil, tea.Tick(time.Second, func(time.Time) tea.Msg {
+				return confirmExpiredMsg{generation: gen}
+			})
 
 		case "up", "down", "pgup", "pgdown":
 			prevIndex := m.list.Index()
@@ -192,22 +205,7 @@ func (m DeleteModel) View() string {
 	listView := m.list.View()
 
 	if m.statusMsg != "" {
-		lines := strings.Split(listView, "\n")
-		last := lines[len(lines)-1]
-		avail := m.width - lipgloss.Width(last) - 2
-		if avail > 0 {
-			msg := m.statusMsg
-			if len(msg) > avail {
-				msg = msg[:avail-1] + "…"
-			}
-			styled := m.statusStyle.Render(msg)
-			pad := m.width - lipgloss.Width(last) - lipgloss.Width(styled)
-			if pad < 1 {
-				pad = 1
-			}
-			lines[len(lines)-1] = last + strings.Repeat(" ", pad) + styled
-		}
-		listView = strings.Join(lines, "\n")
+		listView += "\n" + m.statusStyle.Render(m.statusMsg)
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", listView)
@@ -224,6 +222,24 @@ func (m *DeleteModel) SetSize(w, h int) {
 func (m *DeleteModel) AddItem(conn model.Connection) {
 	m.allItems = insertItemSorted(m.allItems, conn)
 	m.applyFilter()
+}
+
+// SetItems replaces the full connection list (used for source toggling).
+func (m *DeleteModel) SetItems(items []connectionItem) {
+	listItems := make([]list.Item, len(items))
+	for i, ci := range items {
+		listItems[i] = ci
+	}
+	m.allItems = listItems
+	m.applyFilter()
+}
+
+// ResetConfirm clears the delete confirmation sequence.
+func (m *DeleteModel) ResetConfirm() {
+	m.confirmCount = 0
+	m.confirmTarget = 0
+	m.confirmGeneration++
+	m.statusMsg = ""
 }
 
 // RemoveByName removes the first item matching the given connection name.
