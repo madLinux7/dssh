@@ -115,7 +115,7 @@ func writeAskpassScript(password string) (string, error) {
 
 	if runtime.GOOS == "windows" {
 		name = "dssh-askpass-*.bat"
-		content = fmt.Sprintf("@echo off\r\necho %s\r\n", password)
+		content = fmt.Sprintf("@echo off\r\necho %s\r\n", escapeBatchSpecial(password))
 	} else {
 		name = "dssh-askpass-*.sh"
 		content = fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' '%s'\n", escapeShellSingleQuote(password))
@@ -146,6 +146,23 @@ func writeAskpassScript(password string) (string, error) {
 		return "", err
 	}
 	return abs, nil
+}
+
+// escapeBatchSpecial escapes characters that have special meaning in batch scripts (& | < > ^ %) to prevent command injection.
+// Big Thanks to Cody Churchwell (https://github.com/consigcody94) for pointing this out!
+func escapeBatchSpecial(s string) string {
+	result := make([]byte, 0, len(s)+10)
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '^', '&', '|', '<', '>', '(', ')', '!':
+			result = append(result, '^', s[i])
+		case '%':
+			result = append(result, '%', '%')
+		default:
+			result = append(result, s[i])
+		}
+	}
+	return string(result)
 }
 
 // escapeShellSingleQuote escapes single quotes for safe embedding in a
