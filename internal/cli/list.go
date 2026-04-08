@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/madLinux7/dssh/internal/db"
+	"github.com/madLinux7/dssh/internal/model"
 	"github.com/spf13/cobra"
 )
 
@@ -16,13 +16,7 @@ func newListCmd() *cobra.Command {
 		Short:   "List all saved connections",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			d, err := db.Open()
-			if err != nil {
-				return err
-			}
-			defer d.Close()
-
-			conns, err := db.List(d)
+			conns, err := listConnections()
 			if err != nil {
 				return err
 			}
@@ -32,14 +26,24 @@ func newListCmd() *cobra.Command {
 				return nil
 			}
 
+			showSource := runtimeCfg != nil && runtimeCfg.ParseMode == model.ParseModeBoth
+
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR")
+			if showSource {
+				fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR\tSOURCE")
+			} else {
+				fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR")
+			}
 			for _, c := range conns {
 				dir := c.Directory
 				if dir == "" {
 					dir = "-"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir)
+				if showSource {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir, c.Source)
+				} else {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir)
+				}
 			}
 			return w.Flush()
 		},

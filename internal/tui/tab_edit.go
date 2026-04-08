@@ -12,12 +12,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/sshconfig"
 )
 
 // editedInfo carries old/new names so AppModel can sync all lists after an edit.
 type editedInfo struct {
 	oldName string
 	newName string
+	source  model.Source
 }
 
 // EditModel is the Bubble Tea model for the Edit tab.
@@ -38,8 +40,9 @@ type EditModel struct {
 	atSave    bool
 
 	// Shared
-	database    *sql.DB
-	lastEdited  *editedInfo
+	database       *sql.DB
+	sshConfigDest string
+	lastEdited     *editedInfo
 	statusMsg   string
 	statusStyle lipgloss.Style
 	width       int
@@ -263,6 +266,10 @@ func (m EditModel) updateForm(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
 			return m, nil, nil
 
 		case "ctrl+t":
+			// Don't allow toggling to password for ssh_config entries.
+			if m.origConn.Source == model.SourceSSHConfig {
+				return m, nil, nil
+			}
 			if m.authType == "key" {
 				m.authType = "password"
 				if m.focused == fieldIdentityFile {
@@ -375,14 +382,22 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 		conn.PassNonce = m.origConn.PassNonce
 	}
 
-	if err := db.Update(m.database, conn); err != nil {
-		m.statusMsg = fmt.Sprintf("Error: %s", err)
-		m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-		return m, nil, nil
+	if m.origConn.Source == model.SourceSSHConfig {
+		if err := sshconfig.Update(m.sshConfigDest, m.origConn.Name, conn); err != nil {
+			m.statusMsg = fmt.Sprintf("Error: %s", err)
+			m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+			return m, nil, nil
+		}
+	} else {
+		if err := db.Update(m.database, conn); err != nil {
+			m.statusMsg = fmt.Sprintf("Error: %s", err)
+			m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
+			return m, nil, nil
+		}
 	}
 
 	oldName := m.origConn.Name
-	m.lastEdited = &editedInfo{oldName: oldName, newName: name}
+	m.lastEdited = &editedInfo{oldName: oldName, newName: name, source: m.origConn.Source}
 	m.editing = false
 	return m, nil, nil
 }
@@ -433,6 +448,9 @@ func (m EditModel) viewForm() string {
 	b.WriteString("\n")
 	authLabel := labelStyle.Render("Auth Type")
 	authHint := blurredFieldStyle.Render("  (ctrl+t to toggle)")
+	if m.origConn.Source == model.SourceSSHConfig {
+		authHint = statusStyle.Render("  (locked: ssh_config entry)")
+	}
 	b.WriteString(fmt.Sprintf("%s %s%s\n\n", authLabel, focusedFieldStyle.Render(m.authType), authHint))
 
 	if m.atSave {
@@ -462,6 +480,16 @@ func (m *EditModel) SetSize(w, h int) {
 // AddItem inserts a connection in ascending alphabetical position.
 func (m *EditModel) AddItem(conn model.Connection) {
 	m.allItems = insertItemSorted(m.allItems, conn)
+	m.applyFilter()
+}
+
+// SetItems replaces the full connection list (used for source toggling).
+func (m *EditModel) SetItems(items []connectionItem) {
+	listItems := make([]list.Item, len(items))
+	for i, ci := range items {
+		listItems[i] = ci
+	}
+	m.allItems = listItems
 	m.applyFilter()
 }
 

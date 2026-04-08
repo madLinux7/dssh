@@ -8,12 +8,15 @@ import (
 
 	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/model"
+	"github.com/madLinux7/dssh/internal/sshconfig"
 	"github.com/spf13/cobra"
 )
 
 func newAddCmd() *cobra.Command {
 	var port int
 	var directory string
+	var addToSQLite bool
+	var addToSSHConfig bool
 
 	cmd := &cobra.Command{
 		Use:   "add [-p PORT] [-d DIR] NAME target [password]",
@@ -28,6 +31,7 @@ and the password is encrypted with your master passphrase.`,
 				return err
 			}
 			target := args[1]
+			hasPassword := len(args) == 3
 
 			user, host, parsedPort, err := parseTarget(target)
 			if err != nil {
@@ -41,12 +45,6 @@ and the password is encrypted with your master passphrase.`,
 				parsedPort = 22
 			}
 
-			d, err := db.Open()
-			if err != nil {
-				return err
-			}
-			defer d.Close()
-
 			conn := &model.Connection{
 				Name:      name,
 				User:      user,
@@ -56,12 +54,22 @@ and the password is encrypted with your master passphrase.`,
 				AuthType:  model.AuthKey,
 			}
 
-			// Optional password argument → password auth.
-			if len(args) == 3 {
+			// Determine save target.
+			saveTarget := resolveAddTarget(addToSQLite, addToSSHConfig, hasPassword)
+			if saveTarget == "" {
+				return nil // user aborted
+			}
+
+			// Password handling.
+			if hasPassword {
+				if saveTarget == model.SaveTargetSSHConfig {
+					errMsg("Passwords can only be saved to SQLite. Use %s or %s mode.",
+						magentaText("--sqlite"), magentaText("sqlite_only"))
+					return nil
+				}
 				password := args[2]
 				conn.AuthType = model.AuthPassword
-
-				encPass, nonce, err := encryptPassword(d, password)
+				encPass, nonce, err := encryptPassword(sharedDB, password)
 				if err != nil {
 					return err
 				}
@@ -69,11 +77,29 @@ and the password is encrypted with your master passphrase.`,
 				conn.PassNonce = nonce
 			}
 
-			if err := db.Insert(d, conn); err != nil {
-				return err
+			// Cross-source duplicate check in "both" mode.
+			if runtimeCfg.ParseMode == model.ParseModeBoth {
+				if err := checkCrossSourceDuplicate(name, saveTarget); err != nil {
+					return err
+				}
 			}
 
-			success("Added connection %q (%s@%s:%d)", name, user, host, parsedPort)
+			// Save to the chosen target.
+			if saveTarget == model.SaveTargetSSHConfig {
+				p, err := sshConfigPath()
+				if err != nil {
+					return err
+				}
+				if err := sshconfig.Insert(p, conn); err != nil {
+					return err
+				}
+				success("Added connection %q to ssh_config (%s@%s:%d)", name, user, host, parsedPort)
+			} else {
+				if err := db.Insert(sharedDB, conn); err != nil {
+					return err
+				}
+				success("Added connection %q to SQLite (%s@%s:%d)", name, user, host, parsedPort)
+			}
 			return nil
 		},
 	}
@@ -82,7 +108,80 @@ and the password is encrypted with your master passphrase.`,
 	cmd.Flags().StringVarP(&directory, "directory", "d", "", "Remote directory to cd into on connect")
 	cmd.Flags().StringVar(&directory, "cd", "", "Alias for --directory")
 	cmd.Flags().MarkHidden("cd")
+	cmd.Flags().BoolVar(&addToSQLite, "sqlite", false, "Save to SQLite")
+	cmd.Flags().BoolVar(&addToSSHConfig, "sshconfig", false, "Save to ssh_config")
 	return cmd
+}
+
+// resolveAddTarget determines where to save based on flags and mode.
+// Returns empty string if user aborted.
+func resolveAddTarget(flagSQL, flagSSH, hasPassword bool) model.SaveTarget {
+	mode := runtimeCfg.ParseMode
+
+	// Explicit flags take priority.
+	if flagSQL {
+		return model.SaveTargetSQLite
+	}
+	if flagSSH {
+		return model.SaveTargetSSHConfig
+	}
+
+	switch mode {
+	case model.ParseModeSSHConfigOnly:
+		return model.SaveTargetSSHConfig
+	case model.ParseModeBoth:
+		if hasPassword {
+			fmt.Println("Passwords can only be saved to SQLite.")
+			choice := radioPrompt("Save to SQLite?", []string{"Yes", "Abort"})
+			if choice == 0 {
+				return model.SaveTargetSQLite
+			}
+			return ""
+		}
+		// Prompt with radio buttons, pre-select the default.
+		options := []string{"SQLite", "ssh_config"}
+		choice := radioPrompt("Save to:", options)
+		switch choice {
+		case 0:
+			return model.SaveTargetSQLite
+		case 1:
+			return model.SaveTargetSSHConfig
+		default:
+			return ""
+		}
+	default: // sqlite_only
+		return model.SaveTargetSQLite
+	}
+}
+
+// checkCrossSourceDuplicate warns if the name exists in the other source.
+func checkCrossSourceDuplicate(name string, target model.SaveTarget) error {
+	sqlConn, sshConn, err := getConnectionSources(name)
+	if err != nil {
+		return err
+	}
+	if sqlConn != nil && sshConn != nil {
+		return fmt.Errorf("connection %q already exists in both SQLite and ssh_config", name)
+	}
+	if target == model.SaveTargetSQLite && sshConn != nil {
+		fmt.Printf("Connection %q already exists in ssh_config.\n", name)
+		choice := radioPrompt("Save to SQLite anyway?", []string{"Yes", "Abort"})
+		if choice != 0 {
+			return fmt.Errorf("aborted")
+		}
+	}
+	if target == model.SaveTargetSSHConfig && sqlConn != nil {
+		fmt.Printf("Connection %q already exists in SQLite.\n", name)
+		choice := radioPrompt("Save to ssh_config anyway?", []string{"Yes", "Abort"})
+		if choice != 0 {
+			return fmt.Errorf("aborted")
+		}
+	}
+	return nil
+}
+
+func magentaText(s string) string {
+	return fmt.Sprintf("\033[35m%s\033[0m", s)
 }
 
 // parseTarget parses user@host or ssh://user@host:port into components.

@@ -48,6 +48,7 @@ func newResetCmd() *cobra.Command {
 			}
 
 			success("All data has been reset")
+			fmt.Println("Note: ssh_config entries are not affected by reset.")
 			return nil
 		},
 	}

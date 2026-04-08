@@ -12,3 +12,4 @@ vendor/
 Thumbs.db
 
 push-full.sh
+dssh
