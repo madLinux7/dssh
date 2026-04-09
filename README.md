@@ -1,10 +1,9 @@
-# dssh — **D**ead **S**imple S**SH**
+# dssh — **D**ead **S**imple S**SH** (connection manager)
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Release](https://img.shields.io/github/v/release/madLinux7/dssh?color=7B2FBE&logo=github)](https://github.com/madLinux7/dssh/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows%20%7C%20freebsd-D946EF)](https://github.com/madLinux7/dssh/releases)
-[![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
 The only SSH connection management tool you'll ever need. **TUI & CLI**. No dependencies, no manual file editing.
