@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/madLinux7/dssh/internal/model"
 )
 
 // PassphraseResult is returned when the user submits or cancels the modal.
@@ -185,7 +186,7 @@ func (m PassphraseModal) View() string {
 	}
 
 	b.WriteString("\n\n")
-	b.WriteString(statusStyle.Render("esc: cancel  |  enter: next/submit"))
+	b.WriteString(statusStyle.Render(model.BuildHints(model.HintEscCancel, model.HintEnterNextSubmit)))
 
 	inner := b.String()
 

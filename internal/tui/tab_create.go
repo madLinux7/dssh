@@ -371,8 +371,7 @@ func (m CreateModel) View() string {
 	}
 
 	b.WriteString("\n\n")
-	hints := "esc: cancel  |  up/down: navigate  |  ctrl+t: toggle auth  |  enter: next/save"
-	b.WriteString(statusStyle.Render(hints))
+	b.WriteString(statusStyle.Render(model.BuildHints(model.HintEscCancel, model.HintNav, model.HintToggleAuth, model.HintEnterNextSave)))
 
 	return b.String()
 }
