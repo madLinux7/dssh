@@ -6,7 +6,7 @@
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows%20%7C%20freebsd-D946EF)](https://github.com/madLinux7/dssh/releases)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
-The only SSH connection management tool you'll ever need. **TUI & CLI**. No dependencies, no manual file editing.
+The only SSH connection management tool you'll ever need. **CLI & TUI**. No dependencies, no manual file editing.
 
 Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-platform.
 
