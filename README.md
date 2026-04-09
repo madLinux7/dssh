@@ -7,7 +7,7 @@
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
-The only SSH connection management tool you'll ever need. **TUI & CLI**. No dependencies, no more file editing.
+The only SSH connection management tool you'll ever need. **TUI & CLI**. No dependencies, no manual file editing.
 
 Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-platform.
 
@@ -85,6 +85,8 @@ dssh is a thin wrapper around your system's `ssh` binary:
 ## Connection Modes
 
 On first launch, dssh asks you to choose a connection mode:
+
+![test](demo_welcome.gif)
 
 | Mode | Description |
 |---|---|
