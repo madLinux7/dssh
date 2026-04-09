@@ -15,6 +15,11 @@ Store connections in **SQLite**, your **ssh_config** file, or **both** — your 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
 <p align="center">
+  <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
+  <sub>TUI navigation demo</sub>
+</p>
+
+<p align="center">
   <img src="demo_1.gif" alt="dssh demo"><br>
   <sub>TUI connect demo</sub>
 </p>
@@ -22,11 +27,6 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 <p align="center">
   <img src="demo_instant_connect.gif" alt="dssh CLI instant connect demo"><br>
   <sub>CLI instant connect demo</sub>
-</p>
-
-<p align="center">
-  <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
-  <sub>TUI navigation demo</sub>
 </p>
 
 ## Table of Contents
