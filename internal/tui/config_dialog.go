@@ -421,7 +421,7 @@ func (m configDialogModel) viewMain() string {
 	}, m.cursor)
 
 	b.WriteString("\n")
-	b.WriteString(cfgHint.Render("↑/↓ navigate • enter select • esc cancel"))
+	b.WriteString(cfgHint.Render(model.BuildHints(model.HintNav, model.HintEnterSelect, model.HintEscCancel)))
 	return b.String()
 }
 
@@ -449,7 +449,7 @@ func (m configDialogModel) viewSSHDest() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(cfgHint.Render("↑/↓ navigate • enter select • esc back"))
+	b.WriteString(cfgHint.Render(model.BuildHints(model.HintNav, model.HintEnterSelect, model.HintEscBack)))
 	return b.String()
 }
 
@@ -468,6 +468,6 @@ func (m configDialogModel) viewCreate() string {
 	}, m.cursor)
 
 	b.WriteString("\n")
-	b.WriteString(cfgHint.Render("↑/↓ navigate • enter select • esc back"))
+	b.WriteString(cfgHint.Render(model.BuildHints(model.HintNav, model.HintEnterSelect, model.HintEscBack)))
 	return b.String()
 }

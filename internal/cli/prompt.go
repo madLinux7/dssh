@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/madLinux7/dssh/internal/model"
 )
 
 var (
@@ -73,6 +74,6 @@ func (m radioModel) View() string {
 			s += fmt.Sprintf("  %s %s\n", promptUnselectedStyle.Render("◯"), promptUnselectedStyle.Render(opt))
 		}
 	}
-	s += "\n" + promptHintStyle.Render("↑/↓ navigate • enter select • esc cancel")
+	s += "\n" + promptHintStyle.Render(model.BuildHints(model.HintNav, model.HintEnterSelect, model.HintEscCancel))
 	return s
 }
