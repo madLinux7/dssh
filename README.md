@@ -6,13 +6,18 @@
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows%20%7C%20freebsd-D946EF)](https://github.com/madLinux7/dssh/releases)
 [![AES-256-GCM](https://img.shields.io/badge/crypto-AES--256--GCM%20%2B%20Argon2id-22C55E?logo=letsencrypt&logoColor=white)](#password-encryption)
 
-The only SSH connection management tool you'll ever need. **TUI & CLI**. No dependencies, no manual file editing.
+The only SSH connection management tool you'll ever need. **CLI & TUI**. No dependencies, no manual file editing.
 
 Four core features: **Create, Connect, Edit, Delete**. Dead-simple and cross-platform.
 
 Store connections in **SQLite**, your **ssh_config** file, or **both** — your choice.
 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
+
+<p align="center">
+  <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
+  <sub>TUI navigation demo</sub>
+</p>
 
 <p align="center">
   <img src="demo_1.gif" alt="dssh demo"><br>
@@ -22,11 +27,6 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 <p align="center">
   <img src="demo_instant_connect.gif" alt="dssh CLI instant connect demo"><br>
   <sub>CLI instant connect demo</sub>
-</p>
-
-<p align="center">
-  <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
-  <sub>TUI navigation demo</sub>
 </p>
 
 ## Table of Contents
@@ -137,7 +137,7 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 
 ### Quick start - Let's Go!
 
-```bash
+```sh
 # Add a connection (will use default pubkey identity)
 dssh add myserver root@192.168.1.10
 
@@ -150,7 +150,7 @@ dssh myserver
 dssh rm myserver
 ```
 
-```bash
+```sh
 # Open the TUI where you can basically do anything
 dssh
 ```
@@ -159,7 +159,7 @@ Run `dssh` with no arguments to launch the TUI.
 
 ### Add a connection
 
-```bash
+```sh
 # user@host (port 22 by default)
 dssh add myserver root@192.168.1.10
 
@@ -178,7 +178,7 @@ dssh add myserver root@192.168.1.10 'my-ssh-password'
 
 ### Connect to a host
 
-```bash
+```sh
 # Direct connect by name
 dssh myserver
 
@@ -190,7 +190,7 @@ dssh myserver -- -v -L 8080:localhost:80
 
 Launch the TUI wizard to create a connection interactively.
 
-```bash
+```sh
 dssh create
 dssh new # alias
 ```
@@ -203,7 +203,7 @@ The wizard supports both key-based and password-based authentication. For passwo
 
 Launch the TUI directly on the Edit tab to modify an existing connection.
 
-```bash
+```sh
 dssh edit
 ```
 
@@ -211,13 +211,13 @@ dssh edit
 
 Launch the TUI directly on the Delete tab. Requires pressing Enter 3 times on the same item to confirm.
 
-```bash
+```sh
 dssh delete
 ```
 
 ### List connections (CLI)
 
-```bash
+```sh
 dssh list
 dssh ls # alias
 ```
@@ -233,7 +233,7 @@ skylink             root       skylink.vps     22     key       -
 
 ### Remove a connection (CLI)
 
-```bash
+```sh
 dssh rm myserver
 ```
 Remove a connection instantly. No confirmation asked.
@@ -242,7 +242,7 @@ Remove a connection instantly. No confirmation asked.
 
 Switch between SQLite, ssh_config, or both at any time.
 
-```bash
+```sh
 dssh config
 ```
 
@@ -250,7 +250,7 @@ dssh config
 
 View current settings:
 
-```bash
+```sh
 dssh config get
 ```
 
@@ -265,7 +265,7 @@ parse_both_default_save_target:  sqlite
 
 Wipe all saved connections, encrypted passwords, and settings (deletes the SQLite database). Requires two confirmations to prevent accidents.
 
-```bash
+```sh
 dssh reset
 ```
 
@@ -277,11 +277,49 @@ All data has been reset
 
 ## Installation
 
-### Install & Update script (recommended for now)
+### Linux
+
+#### AUR (Arch)
+
+```sh
+yay -S dssh
+```
+
+```sh
+paru -S dssh
+```
+
+_Other package managers following soon!_
+
+### MacOS
+
+#### Homebrew
+
+```sh
+brew install madLinux7/tap/dssh
+```
+
+### Windows
+
+#### winget
+
+```ps1
+winget install madLinux.dssh
+```
+#### scoop
+
+```sh
+# add scoop bucket (if not done already)
+scoop bucket add madLinux7_scoop-bucket https://github.com/madLinux7/scoop-bucket
+# install dssh
+scoop install madLinux7_scoop-bucket/dssh
+```
+
+### Local User Install & Update script
 
 **Linux / macOS / FreeBSD:**
 
-```bash
+```sh
 curl -fsSL https://raw.githubusercontent.com/madLinux7/dssh/main/install.sh | sh
 ```
 
@@ -295,19 +333,11 @@ irm https://raw.githubusercontent.com/madLinux7/dssh/main/install.ps1 | iex
 
 Installs to `%LOCALAPPDATA%\dssh` and adds it to your PATH automatically.
 
-### Homebrew (macOS)
-
-```bash
-brew install madLinux7/tap/dssh
-```
-
-_Other package managers for Linux & Windows following soon!_
-
 ### From GitHub Releases
 
 Download the latest binary for your platform from [Releases](https://github.com/madLinux7/dssh/releases) and place it in your `$PATH`.
 
-```bash
+```sh
 # Example for Linux amd64
 curl -L https://github.com/madLinux7/dssh/releases/latest/download/dssh-linux-amd64 -o dssh
 chmod +x dssh
@@ -318,13 +348,13 @@ sudo mv dssh /usr/local/bin/
 
 Requires Go 1.26+.
 
-```bash
+```sh
 go install github.com/madLinux7/dssh/cmd/dssh@latest
 ```
 
 ### Build locally
 
-```bash
+```sh
 git clone https://github.com/madLinux7/dssh.git
 cd dssh
 # Build only with optimized -ldflags
