@@ -14,6 +14,8 @@ Store connections in **SQLite**, your **ssh_config** file, or **both** — your 
 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
+📚 **Full docs:** [dssh.grolmes.com](https://dssh.grolmes.com)
+
 <p align="center">
   <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
   <sub>TUI navigation demo</sub>
@@ -59,6 +61,8 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
   - [From GitHub Releases](#from-github-releases)
   - [From source](#from-source)
   - [Build locally](#build-locally)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
 - [Acknowledgements](#-acknowledgements-)
 
 ## Features
@@ -82,10 +86,26 @@ Also:
 
 dssh is a thin wrapper around your system's `ssh` binary:
 
+```text
+  ┌──────────────┐   read/write    ┌──────────────────────┐
+  │  dssh (CLI   │◄───────────────►│  ~/.dssh/dssh.db     │
+  │   or TUI)    │                 │   • connections      │
+  └──────┬───────┘                 │   • encrypted passes │
+         │                         └──────────────────────┘
+         │  key auth: syscall.Exec → ssh  (zero overhead)
+         │  pw auth:  fork ssh + SSH_ASKPASS script
+         ▼
+  ┌──────────────┐
+  │     ssh      │────► remote host
+  └──────────────┘
+```
+
 - **Key auth** — `syscall.Exec` replaces the dssh process with ssh (zero overhead, full terminal control)
 - **Password auth** — ssh runs as a child process with `SSH_ASKPASS` to supply the decrypted password (no `sshpass` needed)
 - **Data** — connections stored in SQLite (`~/.dssh/dssh.db`), your `ssh_config` file, or both
 - **Crypto** — AES-256-GCM encryption with Argon2id key derivation for stored passwords
+
+More on the [security model](https://dssh.grolmes.com/guides/security/) and [configuration](https://dssh.grolmes.com/reference/config/) in the docs.
 
 ## Connection Modes
 
@@ -368,6 +388,27 @@ make build
 # Build and compress binary (upx needed)
 make release
 ```
+
+## Documentation
+
+Full docs live at **[dssh.grolmes.com](https://dssh.grolmes.com)**:
+
+- [Get started](https://dssh.grolmes.com/getting-started/) — install, pick a storage mode, save your first connection
+- [Command reference](https://dssh.grolmes.com/reference/commands/) — every CLI flag and example
+- [TUI keybindings](https://dssh.grolmes.com/reference/tui-keys/) — key map per screen
+- [Configuration](https://dssh.grolmes.com/reference/config/) — parse modes, file locations, session flags
+- [Security model](https://dssh.grolmes.com/guides/security/) — crypto flow, threat model, key vs password
+- [Migration](https://dssh.grolmes.com/guides/migration/) — from `ssh_config`, across machines, between modes
+- [Troubleshooting](https://dssh.grolmes.com/guides/troubleshooting/) — permission denied, lost passphrase, WSL quirks
+- [FAQ](https://dssh.grolmes.com/guides/faq/) — YubiKey, passphrase rotation, portability
+- [Limitations](https://dssh.grolmes.com/reference/limitations/) — what dssh deliberately doesn't do
+
+## Contributing
+
+PRs welcome. See the [Contributing guide](https://dssh.grolmes.com/contributing/) for the dev loop, package layout, and PR checklist.
+
+Bugs and feature requests: [github.com/madLinux7/dssh/issues](https://github.com/madLinux7/dssh/issues).
+Security disclosures: please use GitHub's [Security advisory](https://github.com/madLinux7/dssh/security/advisories/new) flow — don't file in the public tracker.
 
 ## ✨ Acknowledgements ✨
 
