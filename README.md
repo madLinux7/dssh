@@ -139,7 +139,7 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 | `dssh` | Launch interactive connection picker |
 | `dssh <name>` | Connect to a saved host by name |
 | `dssh <name> -- <args>` | Connect with extra args forwarded to ssh |
-| `dssh add [-p PORT] [-d DIR] <name> <target> [password]` | Save a new connection |
+| `dssh add [-p PORT] [-d DIR] [-J JUMP] <name> <target> [password]` | Save a new connection |
 | `dssh rm <name>` | Delete a saved connection |
 | `dssh list` / `dssh ls` | List all saved connections |
 | `dssh create` / `dssh new` | Interactive form to create a connection |
@@ -154,12 +154,13 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 
 | Key | Action |
 |---|---|
-| `Tab` / `Shift+Tab` | Switch between tabs |
-| `↑` / `↓` | Navigate lists |
+| `Tab` / `Shift+Tab` | Switch between tabs (always), or move between form fields (Create / Edit) |
+| `←` / `→` | Switch between tabs (Connect / Edit list / Delete always; Create / Edit forms when on an empty field, the Save button, or the Save-To toggle) |
+| `↑` / `↓` | Navigate lists / move between form fields |
 | `Enter` | Select / confirm |
 | `Ctrl+L` | Toggle SQLite / ssh_config list (both mode) |
 | `Ctrl+T` | Toggle key / password auth (create/edit) |
-| `ESC` / `Q` | Quit |
+| `ESC` / `Ctrl+C` | Quit |
 
 ### Quick start - Let's Go!
 
@@ -197,6 +198,12 @@ dssh add myserver ssh://root@192.168.1.10:2222
 
 # Start in a specific remote directory
 dssh add myserver -d /var/www root@192.168.1.10
+
+# Through a jump host (ProxyJump / ssh -J)
+dssh add db01 -J jumpuser@bastion.example.com dbadmin@10.0.1.50
+
+# Through a chain of jump hosts
+dssh add db01 -J jump1.example.com,jump2.example.com dbadmin@10.0.1.50
 
 # With password (will prompt for master passphrase)
 dssh add myserver root@192.168.1.10 'my-ssh-password'
@@ -249,12 +256,12 @@ dssh ls # alias
 ```
 
 ```
-NAME                USER       HOST            PORT   AUTH      DIR
-mike-pulse-001      nomad      10.51.140.154   22     key       -
-myserver            root       192.168.1.10    22     password  -
-rpg-server          npc        192.168.188.7   22222  key       /var/larp
-sharp-nexus-001     deploy     10.105.210.233  22     key       -
-skylink             root       skylink.vps     22     key       -
+NAME                USER       HOST            PORT   AUTH      DIR         JUMP
+mike-pulse-001      nomad      10.51.140.154   22     key       -           -
+myserver            root       192.168.1.10    22     password  -           -
+rpg-server          npc        192.168.188.7   22222  key       /var/larp   -
+sharp-nexus-001     deploy     10.105.210.233  22     key       -           jumpuser@bastion
+skylink             root       skylink.vps     22     key       -           -
 ```
 
 ### Remove a connection (CLI)

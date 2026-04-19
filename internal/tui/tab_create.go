@@ -17,6 +17,7 @@ const (
 	fieldDirectory
 	fieldIdentityFile
 	fieldPassword
+	fieldProxyJump
 	fieldCount
 )
 
@@ -75,6 +76,11 @@ func newCreateModel(width, height int) CreateModel {
 	inputs[fieldPassword].EchoCharacter = '•'
 	inputs[fieldPassword].CharLimit = 128
 	inputs[fieldPassword].Width = 30
+
+	inputs[fieldProxyJump] = textinput.New()
+	inputs[fieldProxyJump].Placeholder = "user@bastion / host1,host2"
+	inputs[fieldProxyJump].CharLimit = 255
+	inputs[fieldProxyJump].Width = 40
 
 	return CreateModel{
 		inputs:   inputs,
@@ -259,6 +265,7 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 						Directory:    m.inputs[fieldDirectory].Value(),
 						AuthType:     m.authType,
 						IdentityFile: m.inputs[fieldIdentityFile].Value(),
+						ProxyJump:    m.inputs[fieldProxyJump].Value(),
 						Password:     m.inputs[fieldPassword].Value(),
 						SaveTo:       saveTo,
 					},
@@ -316,7 +323,7 @@ func (m CreateModel) View() string {
 	b.WriteString(titleStyle.Render("New Connection"))
 	b.WriteString("\n\n")
 
-	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password"}
+	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password", "ProxyJump"}
 
 	for _, i := range m.visibleFields() {
 		label := labelStyle.Render(labels[i])

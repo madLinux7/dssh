@@ -123,6 +123,9 @@ func formatBlock(conn *model.Connection) string {
 	if conn.IdentityFile != "" && conn.IdentityFile != "default" {
 		fmt.Fprintf(&b, "    IdentityFile %s\n", conn.IdentityFile)
 	}
+	if conn.ProxyJump != "" {
+		fmt.Fprintf(&b, "    ProxyJump %s\n", conn.ProxyJump)
+	}
 	if conn.Directory != "" {
 		fmt.Fprintf(&b, "    RemoteCommand cd '%s' && exec $SHELL -l\n", conn.Directory)
 		fmt.Fprintf(&b, "    RequestTTY force\n")

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS connections (
     directory       TEXT    NOT NULL DEFAULT '',
     auth_type       TEXT    NOT NULL DEFAULT 'key',
     identity_file   TEXT    NOT NULL DEFAULT '',
+    proxy_jump      TEXT    NOT NULL DEFAULT '',
     encrypted_pass  BLOB    NOT NULL DEFAULT x'',
     pass_nonce      BLOB    NOT NULL DEFAULT x'',
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -66,5 +67,50 @@ func Open() (*sql.DB, error) {
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
 
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
 	return db, nil
+}
+
+// migrate applies idempotent column additions for databases created by older
+// dssh versions. Each step is guarded by a PRAGMA check so the migration can
+// be run on any database without losing data.
+func migrate(db *sql.DB) error {
+	return addColumnIfMissing(db, "connections", "proxy_jump", "TEXT NOT NULL DEFAULT ''")
+}
+
+// addColumnIfMissing adds a column to a table only if it is not already present.
+func addColumnIfMissing(db *sql.DB, table, column, columnDef string) error {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return fmt.Errorf("inspect %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid           int
+			name, ctype   string
+			notnull, pk   int
+			dfltValue     any
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("scan %s column: %w", table, err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	stmt := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnDef)
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("add column %s.%s: %w", table, column, err)
+	}
+	return nil
 }

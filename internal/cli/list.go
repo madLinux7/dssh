@@ -30,19 +30,23 @@ func newListCmd() *cobra.Command {
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			if showSource {
-				fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR\tSOURCE")
+				fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR\tJUMP\tSOURCE")
 			} else {
-				fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR")
+				fmt.Fprintln(w, "NAME\tUSER\tHOST\tPORT\tAUTH\tDIR\tJUMP")
 			}
 			for _, c := range conns {
 				dir := c.Directory
 				if dir == "" {
 					dir = "-"
 				}
+				jump := c.ProxyJump
+				if jump == "" {
+					jump = "-"
+				}
 				if showSource {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir, c.Source)
+					fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir, jump, c.Source)
 				} else {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir)
+					fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", c.Name, c.User, c.Host, c.Port, c.AuthType, dir, jump)
 				}
 			}
 			return w.Flush()

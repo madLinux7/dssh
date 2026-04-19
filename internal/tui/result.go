@@ -21,6 +21,7 @@ type WizardResult struct {
 	Directory    string
 	AuthType     string // "key" or "password"
 	IdentityFile string
+	ProxyJump    string
 	Password     string
 	SaveTo       model.SaveTarget // "sqlite" or "ssh_config" (only relevant in "both" mode)
 }

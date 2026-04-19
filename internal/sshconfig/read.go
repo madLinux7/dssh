@@ -88,6 +88,8 @@ func List(path string) ([]model.Connection, error) {
 			}
 		case "identityfile":
 			current.IdentityFile = value
+		case "proxyjump":
+			current.ProxyJump = value
 		case "remotecommand":
 			if m := remoteCommandRe.FindStringSubmatch(value); m != nil {
 				current.Directory = m[1]

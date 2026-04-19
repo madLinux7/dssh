@@ -54,6 +54,7 @@ func savePasswordAuth(d *sql.DB, wr *tui.WizardResult) error {
 		Host:      wr.Host,
 		Port:      port,
 		Directory: wr.Directory,
+		ProxyJump: wr.ProxyJump,
 		AuthType:  model.AuthPassword,
 	}
 
