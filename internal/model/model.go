@@ -57,6 +57,7 @@ type Connection struct {
 	Directory     string
 	AuthType      AuthType
 	IdentityFile  string
+	ProxyJump     string
 	EncryptedPass []byte
 	PassNonce     []byte
 	CreatedAt     string

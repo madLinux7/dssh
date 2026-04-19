@@ -89,6 +89,10 @@ func buildArgs(conn *model.Connection, extraArgs []string) []string {
 		args = append(args, "-i", conn.IdentityFile)
 	}
 
+	if conn.ProxyJump != "" {
+		args = append(args, "-J", conn.ProxyJump)
+	}
+
 	if conn.AuthType == model.AuthPassword {
 		args = append(args, "-o", "PreferredAuthentications=password",
 			"-o", "PubkeyAuthentication=no")

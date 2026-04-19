@@ -14,6 +14,8 @@ Store connections in **SQLite**, your **ssh_config** file, or **both** — your 
 
 Passwords are encrypted using a master passphrase (_you should consider using pubkeys only tho ;))_.
 
+📚 **Full docs:** [dssh.grolmes.com](https://dssh.grolmes.com)
+
 <p align="center">
   <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
   <sub>TUI navigation demo</sub>
@@ -59,6 +61,8 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
   - [From GitHub Releases](#from-github-releases)
   - [From source](#from-source)
   - [Build locally](#build-locally)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
 - [Acknowledgements](#-acknowledgements-)
 
 ## Features
@@ -82,10 +86,26 @@ Also:
 
 dssh is a thin wrapper around your system's `ssh` binary:
 
+```text
+  ┌──────────────┐   read/write    ┌──────────────────────┐
+  │  dssh (CLI   │◄───────────────►│  ~/.dssh/dssh.db     │
+  │   or TUI)    │                 │   • connections      │
+  └──────┬───────┘                 │   • encrypted passes │
+         │                         └──────────────────────┘
+         │  key auth: syscall.Exec → ssh  (zero overhead)
+         │  pw auth:  fork ssh + SSH_ASKPASS script
+         ▼
+  ┌──────────────┐
+  │     ssh      │────► remote host
+  └──────────────┘
+```
+
 - **Key auth** — `syscall.Exec` replaces the dssh process with ssh (zero overhead, full terminal control)
 - **Password auth** — ssh runs as a child process with `SSH_ASKPASS` to supply the decrypted password (no `sshpass` needed)
 - **Data** — connections stored in SQLite (`~/.dssh/dssh.db`), your `ssh_config` file, or both
 - **Crypto** — AES-256-GCM encryption with Argon2id key derivation for stored passwords
+
+More on the [security model](https://dssh.grolmes.com/guides/security/) and [configuration](https://dssh.grolmes.com/reference/config/) in the docs.
 
 ## Connection Modes
 
@@ -119,7 +139,7 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 | `dssh` | Launch interactive connection picker |
 | `dssh <name>` | Connect to a saved host by name |
 | `dssh <name> -- <args>` | Connect with extra args forwarded to ssh |
-| `dssh add [-p PORT] [-d DIR] <name> <target> [password]` | Save a new connection |
+| `dssh add [-p PORT] [-d DIR] [-J JUMP] <name> <target> [password]` | Save a new connection |
 | `dssh rm <name>` | Delete a saved connection |
 | `dssh list` / `dssh ls` | List all saved connections |
 | `dssh create` / `dssh new` | Interactive form to create a connection |
@@ -134,12 +154,13 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 
 | Key | Action |
 |---|---|
-| `Tab` / `Shift+Tab` | Switch between tabs |
-| `↑` / `↓` | Navigate lists |
+| `Tab` / `Shift+Tab` | Switch between tabs (always), or move between form fields (Create / Edit) |
+| `←` / `→` | Switch between tabs (Connect / Edit list / Delete always; Create / Edit forms when on an empty field, the Save button, or the Save-To toggle) |
+| `↑` / `↓` | Navigate lists / move between form fields |
 | `Enter` | Select / confirm |
 | `Ctrl+L` | Toggle SQLite / ssh_config list (both mode) |
 | `Ctrl+T` | Toggle key / password auth (create/edit) |
-| `ESC` / `Q` | Quit |
+| `ESC` / `Ctrl+C` | Quit |
 
 ### Quick start - Let's Go!
 
@@ -177,6 +198,12 @@ dssh add myserver ssh://root@192.168.1.10:2222
 
 # Start in a specific remote directory
 dssh add myserver -d /var/www root@192.168.1.10
+
+# Through a jump host (ProxyJump / ssh -J)
+dssh add db01 -J jumpuser@bastion.example.com dbadmin@10.0.1.50
+
+# Through a chain of jump hosts
+dssh add db01 -J jump1.example.com,jump2.example.com dbadmin@10.0.1.50
 
 # With password (will prompt for master passphrase)
 dssh add myserver root@192.168.1.10 'my-ssh-password'
@@ -229,12 +256,12 @@ dssh ls # alias
 ```
 
 ```
-NAME                USER       HOST            PORT   AUTH      DIR
-mike-pulse-001      nomad      10.51.140.154   22     key       -
-myserver            root       192.168.1.10    22     password  -
-rpg-server          npc        192.168.188.7   22222  key       /var/larp
-sharp-nexus-001     deploy     10.105.210.233  22     key       -
-skylink             root       skylink.vps     22     key       -
+NAME                USER       HOST            PORT   AUTH      DIR         JUMP
+mike-pulse-001      nomad      10.51.140.154   22     key       -           -
+myserver            root       192.168.1.10    22     password  -           -
+rpg-server          npc        192.168.188.7   22222  key       /var/larp   -
+sharp-nexus-001     deploy     10.105.210.233  22     key       -           jumpuser@bastion
+skylink             root       skylink.vps     22     key       -           -
 ```
 
 ### Remove a connection (CLI)
@@ -368,6 +395,27 @@ make build
 # Build and compress binary (upx needed)
 make release
 ```
+
+## Documentation
+
+Full docs live at **[dssh.grolmes.com](https://dssh.grolmes.com)**:
+
+- [Get started](https://dssh.grolmes.com/getting-started/) — install, pick a storage mode, save your first connection
+- [Command reference](https://dssh.grolmes.com/reference/commands/) — every CLI flag and example
+- [TUI keybindings](https://dssh.grolmes.com/reference/tui-keys/) — key map per screen
+- [Configuration](https://dssh.grolmes.com/reference/config/) — parse modes, file locations, session flags
+- [Security model](https://dssh.grolmes.com/guides/security/) — crypto flow, threat model, key vs password
+- [Migration](https://dssh.grolmes.com/guides/migration/) — from `ssh_config`, across machines, between modes
+- [Troubleshooting](https://dssh.grolmes.com/guides/troubleshooting/) — permission denied, lost passphrase, WSL quirks
+- [FAQ](https://dssh.grolmes.com/guides/faq/) — YubiKey, passphrase rotation, portability
+- [Limitations](https://dssh.grolmes.com/reference/limitations/) — what dssh deliberately doesn't do
+
+## Contributing
+
+PRs welcome. See the [Contributing guide](https://dssh.grolmes.com/contributing/) for the dev loop, package layout, and PR checklist.
+
+Bugs and feature requests: [github.com/madLinux7/dssh/issues](https://github.com/madLinux7/dssh/issues).
+Security disclosures: please use GitHub's [Security advisory](https://github.com/madLinux7/dssh/security/advisories/new) flow — don't file in the public tracker.
 
 ## ✨ Acknowledgements ✨
 

@@ -15,11 +15,12 @@ import (
 func newAddCmd() *cobra.Command {
 	var port int
 	var directory string
+	var proxyJump string
 	var addToSQLite bool
 	var addToSSHConfig bool
 
 	cmd := &cobra.Command{
-		Use:   "add [-p PORT] [-d DIR] NAME target [password]",
+		Use:   "add [-p PORT] [-d DIR] [-J JUMP] NAME target [password]",
 		Short: "Add a new SSH connection",
 		Long: `Add a new SSH connection. Target can be user@host or ssh://user@host:port.
 If a password is provided, the connection uses password authentication
@@ -51,6 +52,7 @@ and the password is encrypted with your master passphrase.`,
 				Host:      host,
 				Port:      parsedPort,
 				Directory: directory,
+				ProxyJump: proxyJump,
 				AuthType:  model.AuthKey,
 			}
 
@@ -108,6 +110,7 @@ and the password is encrypted with your master passphrase.`,
 	cmd.Flags().StringVarP(&directory, "directory", "d", "", "Remote directory to cd into on connect")
 	cmd.Flags().StringVar(&directory, "cd", "", "Alias for --directory")
 	cmd.Flags().MarkHidden("cd")
+	cmd.Flags().StringVarP(&proxyJump, "proxy-jump", "J", "", "ProxyJump host (user@bastion / host1,host2)")
 	cmd.Flags().BoolVar(&addToSQLite, "sqlite", false, "Save to SQLite")
 	cmd.Flags().BoolVar(&addToSSHConfig, "sshconfig", false, "Save to ssh_config")
 	return cmd

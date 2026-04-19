@@ -1,0 +1,90 @@
+name: Update Scoop Bucket
+
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.0.0)"
+        required: true
+
+jobs:
+  scoop:
+    if: github.server_url == 'https://github.com' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release info
+        id: release
+        run: |
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag || github.event.workflow_run.head_branch }}"
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Download Windows binary and compute checksum
+        id: checksum
+        run: |
+          TAG="${{ steps.release.outputs.tag }}"
+          BASE="https://github.com/madLinux7/dssh/releases/download/${TAG}"
+          curl -sL "${BASE}/dssh.exe" -o dssh.exe
+          if [ ! -s dssh.exe ]; then
+            echo "Failed to download dssh.exe from ${BASE}"
+            exit 1
+          fi
+          echo "sha256=$(sha256sum dssh.exe | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout scoop-bucket
+        uses: actions/checkout@v4
+        with:
+          repository: madLinux7/scoop-bucket
+          token: ${{ secrets.SCOOP_TOKEN }}
+
+      - name: Update manifest
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          TAG="${{ steps.release.outputs.tag }}"
+          SHA="${{ steps.checksum.outputs.sha256 }}"
+          URL="https://github.com/madLinux7/dssh/releases/download/${TAG}/dssh.exe"
+
+          cat > bucket/dssh.json << MANIFEST
+          {
+            "version": "${VERSION}",
+            "description": "The only SSH connection manager you'll ever need. TUI & CLI. ssh_config, SQLite or both.",
+            "homepage": "https://github.com/madLinux7/dssh",
+            "license": "MIT",
+            "architecture": {
+              "64bit": {
+                "url": "${URL}",
+                "hash": "${SHA}"
+              }
+            },
+            "bin": "dssh.exe",
+            "checkver": "github",
+            "autoupdate": {
+              "architecture": {
+                "64bit": {
+                  "url": "https://github.com/madLinux7/dssh/releases/download/v\$version/dssh.exe"
+                }
+              }
+            }
+          }
+          MANIFEST
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' bucket/dssh.json
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/dssh.json
+          if git diff --cached --quiet; then
+            echo "Manifest already up to date. Nothing to commit."
+          else
+            git commit -m "Update dssh to ${{ steps.release.outputs.version }}"
+            git push
+          fi

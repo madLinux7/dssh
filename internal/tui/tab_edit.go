@@ -108,6 +108,11 @@ func newEditInputs() [fieldCount]textinput.Model {
 	inputs[fieldPassword].CharLimit = 128
 	inputs[fieldPassword].Width = 30
 
+	inputs[fieldProxyJump] = textinput.New()
+	inputs[fieldProxyJump].Placeholder = "user@bastion / host1,host2"
+	inputs[fieldProxyJump].CharLimit = 255
+	inputs[fieldProxyJump].Width = 40
+
 	return inputs
 }
 
@@ -123,6 +128,7 @@ func (m *EditModel) enterEditMode(conn model.Connection) {
 	m.inputs[fieldPort].SetValue(strconv.Itoa(conn.Port))
 	m.inputs[fieldDirectory].SetValue(conn.Directory)
 	m.inputs[fieldIdentityFile].SetValue(conn.IdentityFile)
+	m.inputs[fieldProxyJump].SetValue(conn.ProxyJump)
 	m.inputs[fieldPassword].SetValue("") // never show stored password
 
 	m.authType = string(conn.AuthType)
@@ -223,10 +229,6 @@ func (m EditModel) updateList(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
 			return m, nil, cmd
 		}
 
-		if msg.String() == "q" && m.filterBox.Value() == "" {
-			return m, &AppResult{Action: ActionNone}, nil
-		}
-
 		prevVal := m.filterBox.Value()
 		var cmd tea.Cmd
 		m.filterBox, cmd = m.filterBox.Update(msg)
@@ -251,14 +253,14 @@ func (m EditModel) updateForm(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
 			m.editing = false
 			return m, nil, nil
 
-		case "down":
+		case "down", "tab":
 			next, save := m.nextField()
 			m.focused = next
 			m.atSave = save
 			m.updateFocus()
 			return m, nil, nil
 
-		case "up":
+		case "up", "shift+tab":
 			prev, save := m.prevField()
 			m.focused = prev
 			m.atSave = save
@@ -352,6 +354,7 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 				Directory:    m.inputs[fieldDirectory].Value(),
 				AuthType:     m.authType,
 				IdentityFile: m.inputs[fieldIdentityFile].Value(),
+				ProxyJump:    m.inputs[fieldProxyJump].Value(),
 				Password:     password,
 			},
 		}, nil
@@ -368,6 +371,7 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 	}
 
 	conn.Directory = m.inputs[fieldDirectory].Value()
+	conn.ProxyJump = m.inputs[fieldProxyJump].Value()
 
 	if m.authType == "key" {
 		idf := m.inputs[fieldIdentityFile].Value()
@@ -438,7 +442,7 @@ func (m EditModel) viewForm() string {
 	b.WriteString(titleStyle.Foreground(magenta).Render("Edit Connection"))
 	b.WriteString("\n\n")
 
-	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password"}
+	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password", "ProxyJump"}
 
 	for _, i := range m.visibleFields() {
 		label := labelStyle.Render(labels[i])

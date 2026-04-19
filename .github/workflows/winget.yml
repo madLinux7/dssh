@@ -1,0 +1,20 @@
+name: Update WinGet Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  winget:
+    name: Update winget-pkgs manifest
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Package
+        uses: michidk/winget-updater@v1
+        with:
+          komac-token: ${{ secrets.KOMAC_TOKEN }}
+          identifier: madLinux.dssh
+          repo: madLinux7/dssh
+          url: "https://github.com/madLinux7/dssh/releases/download/v{VERSION}/dssh.exe"
