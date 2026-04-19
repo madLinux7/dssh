@@ -223,10 +223,6 @@ func (m EditModel) updateList(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
 			return m, nil, cmd
 		}
 
-		if msg.String() == "q" && m.filterBox.Value() == "" {
-			return m, &AppResult{Action: ActionNone}, nil
-		}
-
 		prevVal := m.filterBox.Value()
 		var cmd tea.Cmd
 		m.filterBox, cmd = m.filterBox.Update(msg)
@@ -251,14 +247,14 @@ func (m EditModel) updateForm(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
 			m.editing = false
 			return m, nil, nil
 
-		case "down":
+		case "down", "tab":
 			next, save := m.nextField()
 			m.focused = next
 			m.atSave = save
 			m.updateFocus()
 			return m, nil, nil
 
-		case "up":
+		case "up", "shift+tab":
 			prev, save := m.prevField()
 			m.focused = prev
 			m.atSave = save

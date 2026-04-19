@@ -196,12 +196,12 @@ func (m CreateModel) Update(msg tea.Msg) (CreateModel, *AppResult, tea.Cmd) {
 		case "esc":
 			return m, &AppResult{Action: ActionNone}, nil
 
-		case "down":
+		case "down", "tab":
 			m, _ = m.nextField()
 			m = m.updateFocus()
 			return m, nil, nil
 
-		case "up":
+		case "up", "shift+tab":
 			m, _ = m.prevField()
 			m = m.updateFocus()
 			return m, nil, nil

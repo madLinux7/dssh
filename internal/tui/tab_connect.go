@@ -58,11 +58,6 @@ func (m ConnectModel) Update(msg tea.Msg) (ConnectModel, *AppResult, tea.Cmd) {
 			return m, nil, cmd
 		}
 
-		// "q" quits only when filter is empty.
-		if msg.String() == "q" && m.filterBox.Value() == "" {
-			return m, &AppResult{Action: ActionNone}, nil
-		}
-
 		// All other keys go to the filter.
 		prevVal := m.filterBox.Value()
 		var cmd tea.Cmd

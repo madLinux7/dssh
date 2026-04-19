@@ -202,17 +202,25 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "tab":
-			if !m.editModel.editing {
-				m.activeTab = Tab((int(m.activeTab) + 1) % len(m.tabs))
-				m.statusMsg = ""
-				m.deleteModel.ResetConfirm()
+			// Connect/Edit-list/Delete: switch tabs.
+			// Create/Edit-form: fall through to sub-model for field navigation.
+			if m.canTabSwitchTab() {
+				m = m.switchTabNext()
 				return m, nil
 			}
 		case "shift+tab":
-			if !m.editModel.editing {
-				m.activeTab = Tab((int(m.activeTab) - 1 + len(m.tabs)) % len(m.tabs))
-				m.statusMsg = ""
-				m.deleteModel.ResetConfirm()
+			if m.canTabSwitchTab() {
+				m = m.switchTabPrev()
+				return m, nil
+			}
+		case "left":
+			if m.canArrowSwitchTab() {
+				m = m.switchTabPrev()
+				return m, nil
+			}
+		case "right":
+			if m.canArrowSwitchTab() {
+				m = m.switchTabNext()
 				return m, nil
 			}
 		}
@@ -283,6 +291,62 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// switchTabNext advances the active tab (wraps around) and clears transient state.
+func (m AppModel) switchTabNext() AppModel {
+	m.activeTab = Tab((int(m.activeTab) + 1) % len(m.tabs))
+	m.statusMsg = ""
+	m.deleteModel.ResetConfirm()
+	return m
+}
+
+// switchTabPrev moves to the previous tab (wraps around) and clears transient state.
+func (m AppModel) switchTabPrev() AppModel {
+	m.activeTab = Tab((int(m.activeTab) - 1 + len(m.tabs)) % len(m.tabs))
+	m.statusMsg = ""
+	m.deleteModel.ResetConfirm()
+	return m
+}
+
+// canTabSwitchTab reports whether Tab/Shift+Tab should switch tabs.
+// List tabs (Connect/Delete/Edit-list) switch; form contexts use Tab for field nav.
+func (m AppModel) canTabSwitchTab() bool {
+	switch m.activeTab {
+	case TabConnect, TabDelete:
+		return true
+	case TabEdit:
+		return !m.editModel.editing
+	}
+	return false
+}
+
+// canArrowSwitchTab reports whether Left/Right should switch tabs.
+// In Connect/Delete/Edit-list: always. In forms: only when on the Save button
+// or when the currently focused text field is empty. Save-To toggle (Create)
+// is handled by the sub-model, so we return false there.
+func (m AppModel) canArrowSwitchTab() bool {
+	switch m.activeTab {
+	case TabConnect, TabDelete:
+		return true
+	case TabEdit:
+		if !m.editModel.editing {
+			return true
+		}
+		if m.editModel.atSave {
+			return true
+		}
+		return m.editModel.inputs[m.editModel.focused].Value() == ""
+	case TabCreate:
+		if m.createModel.atSave {
+			return true
+		}
+		if m.createModel.atSaveTo {
+			return false
+		}
+		return m.createModel.inputs[m.createModel.focused].Value() == ""
+	}
+	return false
 }
 
 // handleSave validates and saves a new connection.

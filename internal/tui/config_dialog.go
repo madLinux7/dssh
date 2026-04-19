@@ -95,7 +95,7 @@ func (m configDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m configDialogModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+c", "q":
+	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "esc":
@@ -160,7 +160,7 @@ func (m configDialogModel) updateSSHDest(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "ctrl+c", "q":
+	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "esc":
@@ -244,7 +244,7 @@ func (m configDialogModel) finishWithDest(dest string) configDialogModel {
 
 func (m configDialogModel) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+c", "q":
+	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "esc":
