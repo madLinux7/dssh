@@ -18,17 +18,12 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 
 <p align="center">
   <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
-  <sub>TUI navigation demo</sub>
+  <sub>TUI navigation</sub>
 </p>
 
 <p align="center">
   <img src="demo_1.gif" alt="dssh demo"><br>
-  <sub>TUI connect demo</sub>
-</p>
-
-<p align="center">
-  <img src="demo_instant_connect.gif" alt="dssh CLI instant connect demo"><br>
-  <sub>CLI instant connect demo</sub>
+  <sub>TUI connect</sub>
 </p>
 
 ## Table of Contents
@@ -219,7 +214,7 @@ dssh myserver
 dssh myserver -- -v -L 8080:localhost:80
 ```
 
-### Create (TUI)
+### Create Wizard (TUI)
 
 Launch the TUI wizard to create a connection interactively.
 
