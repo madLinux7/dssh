@@ -1,0 +1,87 @@
+name: AUR Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v2.1.1)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          PKGVER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "pkgver=$PKGVER" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for tarball & compute sha256
+        id: sha
+        run: |
+          URL="https://github.com/madLinux7/dssh/archive/${{ steps.version.outputs.tag }}.tar.gz"
+          for i in 1 2 3 4 5; do
+            if curl -fsSL "$URL" -o src.tar.gz; then
+              break
+            fi
+            echo "Tarball not ready, retry $i/5..."
+            sleep 10
+          done
+          SHA=$(sha256sum src.tar.gz | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Render PKGBUILD
+        run: |
+          mkdir -p aur-out
+          cat > aur-out/PKGBUILD <<EOF
+          # Maintainer: Linus Grolmes <linus@grolmes.de>
+          pkgname=dssh
+          pkgver=${{ steps.version.outputs.pkgver }}
+          pkgrel=1
+          pkgdesc="The only SSH connection manager you'll ever need. CLI & TUI."
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/madLinux7/dssh"
+          license=('MIT')
+          makedepends=('go')
+          depends=('openssh')
+          source=("\$pkgname-\$pkgver.tar.gz::https://github.com/madLinux7/dssh/archive/v\$pkgver.tar.gz")
+          sha256sums=('${{ steps.sha.outputs.sha256 }}')
+
+          build() {
+              cd "\$pkgname-\$pkgver"
+              export CGO_ENABLED=0
+              go build -ldflags="-s -w -X main.version=v\$pkgver" -o dssh ./cmd/dssh/
+          }
+
+          package() {
+              cd "\$pkgname-\$pkgver"
+              install -Dm755 dssh "\$pkgdir/usr/bin/dssh"
+              install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
+          }
+          EOF
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1 # v4.1.1
+        with:
+          pkgname: dssh
+          pkgbuild: aur-out/PKGBUILD
+          commit_username: Linus Grolmes
+          commit_email: linus@grolmes.de
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "[ci] Update to ${{ steps.version.outputs.tag }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+          updpkgsums: false
