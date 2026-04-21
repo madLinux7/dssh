@@ -277,6 +277,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			name := m.deleteModel.lastDeleted
 			m.connectModel.RemoveByName(name)
 			m.editModel.RemoveByName(name)
+			m.sqliteConns = removeConnByName(m.sqliteConns, name)
+			m.sshConfigConns = removeConnByName(m.sshConfigConns, name)
 			m.deleteModel.lastDeleted = ""
 			m.setStatus(fmt.Sprintf("%q deleted", name), successStyle)
 		}
@@ -908,6 +910,15 @@ func (m *AppModel) setError(format string, a ...any) {
 	m.statusMsg = fmt.Sprintf("Error: "+format, a...)
 	m.statusMsgStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
 	m.statusMsgRight = false
+}
+
+func removeConnByName(conns []model.Connection, name string) []model.Connection {
+	for i, c := range conns {
+		if c.Name == name {
+			return append(conns[:i], conns[i+1:]...)
+		}
+	}
+	return conns
 }
 
 func expandTildeTUI(path string) string {
