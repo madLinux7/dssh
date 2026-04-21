@@ -44,13 +44,34 @@ jobs:
           SHA=$(sha256sum src.tar.gz | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Render PKGBUILD
+      - name: Setup SSH for AUR
         run: |
-          mkdir -p aur-out
-          cat > aur-out/PKGBUILD <<EOF
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          cat > ~/.ssh/config <<EOF
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Clone AUR repo
+        run: git clone ssh://aur@aur.archlinux.org/dssh.git aur-repo
+
+      - name: Render PKGBUILD & .SRCINFO
+        env:
+          PKGVER: ${{ steps.version.outputs.pkgver }}
+          SHA256: ${{ steps.sha.outputs.sha256 }}
+        run: |
+          cat > aur-repo/PKGBUILD <<EOF
           # Maintainer: Linus Grolmes <linus@grolmes.de>
           pkgname=dssh
-          pkgver=${{ steps.version.outputs.pkgver }}
+          pkgver=${PKGVER}
           pkgrel=1
           pkgdesc="The only SSH connection manager you'll ever need. CLI & TUI."
           arch=('x86_64' 'aarch64')
@@ -59,7 +80,7 @@ jobs:
           makedepends=('go')
           depends=('openssh')
           source=("\$pkgname-\$pkgver.tar.gz::https://github.com/madLinux7/dssh/archive/v\$pkgver.tar.gz")
-          sha256sums=('${{ steps.sha.outputs.sha256 }}')
+          sha256sums=('${SHA256}')
 
           build() {
               cd "\$pkgname-\$pkgver"
@@ -74,14 +95,34 @@ jobs:
           }
           EOF
 
-      - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1 # v4.1.1
-        with:
-          pkgname: dssh
-          pkgbuild: aur-out/PKGBUILD
-          commit_username: Linus Grolmes
-          commit_email: linus@grolmes.de
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "[ci] Update to ${{ steps.version.outputs.tag }}"
-          ssh_keyscan_types: rsa,ecdsa,ed25519
-          updpkgsums: false
+          cat > aur-repo/.SRCINFO <<EOF
+          pkgbase = dssh
+          	pkgdesc = The only SSH connection manager you'll ever need. CLI & TUI.
+          	pkgver = ${PKGVER}
+          	pkgrel = 1
+          	url = https://github.com/madLinux7/dssh
+          	arch = x86_64
+          	arch = aarch64
+          	license = MIT
+          	makedepends = go
+          	depends = openssh
+          	source = dssh-${PKGVER}.tar.gz::https://github.com/madLinux7/dssh/archive/v${PKGVER}.tar.gz
+          	sha256sums = ${SHA256}
+
+          pkgname = dssh
+          EOF
+
+      - name: Commit & push
+        working-directory: aur-repo
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "Linus Grolmes"
+          git config user.email "linus@grolmes.de"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "No changes to publish"
+            exit 0
+          fi
+          git commit -m "[ci] Update to ${TAG}"
+          git push
