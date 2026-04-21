@@ -97,8 +97,6 @@ func (m CreateModel) reset() CreateModel {
 	for i := range m.inputs {
 		m.inputs[i].SetValue("")
 	}
-	m.inputs[fieldPort].SetValue("22")
-	m.inputs[fieldIdentityFile].SetValue("default")
 	m.focused = fieldName
 	m.atSave = false
 	m.atSaveTo = false
