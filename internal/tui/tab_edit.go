@@ -40,13 +40,13 @@ type EditModel struct {
 	atSave    bool
 
 	// Shared
-	database       *sql.DB
+	database      *sql.DB
 	sshConfigDest string
-	lastEdited     *editedInfo
-	statusMsg   string
-	statusStyle lipgloss.Style
-	width       int
-	height      int
+	lastEdited    *editedInfo
+	statusMsg     string
+	statusStyle   lipgloss.Style
+	width         int
+	height        int
 }
 
 func newEditModel(conns []connectionItem, database *sql.DB, width, height int) EditModel {

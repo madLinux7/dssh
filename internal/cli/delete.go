@@ -7,9 +7,9 @@ import (
 
 func newDeleteCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "delete",
-		Short:   "Interactive delete for saved connections",
-		Args:    cobra.NoArgs,
+		Use:   "delete",
+		Short: "Interactive delete for saved connections",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conns, err := listConnections()
 			if err != nil {

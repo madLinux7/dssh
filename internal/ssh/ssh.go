@@ -170,7 +170,7 @@ func escapeBatchSpecial(s string) string {
 }
 
 // escapeShellSingleQuote escapes single quotes for safe embedding in a
-// single-quoted shell string. Each ' becomes '\'' (end quote, escaped quote, start quote).
+// single-quoted shell string. Each ' becomes '\” (end quote, escaped quote, start quote).
 func escapeShellSingleQuote(s string) string {
 	result := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {

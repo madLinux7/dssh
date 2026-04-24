@@ -25,7 +25,7 @@ const (
 type CreateModel struct {
 	inputs   [fieldCount]textinput.Model
 	focused  int
-	authType string // "key" or "password"
+	authType string           // "key" or "password"
 	saveTo   model.SaveTarget // only relevant when cfg.ParseMode == "both"
 	atSaveTo bool             // cursor is on Save To toggle
 	atSave   bool
