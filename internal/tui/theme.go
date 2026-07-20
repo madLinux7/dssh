@@ -15,18 +15,38 @@ var (
 	warnOrange = lipgloss.Color("#F97316")
 	warnRed    = lipgloss.Color("#EF4444")
 
+	activeTabBorder = lipgloss.Border{
+		Top:         "─",
+		Bottom:      " ",
+		Left:        "│",
+		Right:       "│",
+		TopLeft:     "╭",
+		TopRight:    "╮",
+		BottomLeft:  "╯",
+		BottomRight: "╰",
+	}
+
+	inactiveTabBorder = lipgloss.Border{
+		Top:         "─",
+		Bottom:      "─",
+		Left:        "│",
+		Right:       "│",
+		TopLeft:     "╭",
+		TopRight:    "╮",
+		BottomLeft:  "┴",
+		BottomRight: "┴",
+	}
+
 	activeTabStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(brightWhite).
-			Border(lipgloss.RoundedBorder()).
-			BorderBottom(false).
+			Border(activeTabBorder).
 			BorderForeground(purple).
 			Padding(0, 2)
 
 	inactiveTabStyle = lipgloss.NewStyle().
 				Foreground(brightWhite).
-				Border(lipgloss.RoundedBorder()).
-				BorderBottom(false).
+				Border(inactiveTabBorder).
 				BorderForeground(purple).
 				Padding(0, 2)
 

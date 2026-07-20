@@ -626,66 +626,12 @@ func (m AppModel) View() string {
 		accentColor = warnRed
 	}
 
-	// Tab bar — render each tab and split into top/bottom lines.
-	var tabTopParts, tabBotParts []string
-	var tabWidths []int
-	for i, tab := range m.tabs {
-		style := inactiveTabStyle.BorderForeground(accentColor)
-		if Tab(i) == m.activeTab {
-			style = activeTabStyle.BorderForeground(accentColor)
-		}
-		rendered := style.Render(tab)
-		lines := strings.Split(rendered, "\n")
-		tabTopParts = append(tabTopParts, lines[0])
-		tabBotParts = append(tabBotParts, lines[1])
-		tabWidths = append(tabWidths, lipgloss.Width(lines[0]))
-	}
-	tabTopLine := strings.Join(tabTopParts, " ")
-	tabBotLine := strings.Join(tabBotParts, " ")
-
-	// Mode indicator in top-right corner.
+	// Mode indicator in the top-right corner of the tab label row.
+	modeLabel := ""
 	if m.cfg != nil {
-		label := model.ParseModeLabel(m.cfg.ParseMode)
-		modeStyle := lipgloss.NewStyle().Foreground(dimGray)
-		modeStr := modeStyle.Render(label)
-		tabTopWidth := lipgloss.Width(tabTopLine)
-		modeWidth := lipgloss.Width(modeStr)
-		gap := m.width - tabTopWidth - modeWidth - 1
-		if gap > 0 {
-			tabBotLine += strings.Repeat(" ", gap) + modeStr
-		}
+		modeLabel = model.ParseModeLabel(m.cfg.ParseMode)
 	}
-
-	tabBar := tabTopLine + "\n" + tabBotLine
-
-	// Connecting line: merges tab bottoms with content box top border.
-	contentBoxWidth := m.width // total rendered width of the content box
-	var conn strings.Builder
-	pos := 0
-	for i, w := range tabWidths {
-		if pos == 0 {
-			conn.WriteRune('│')
-		} else {
-			conn.WriteRune('╯')
-		}
-		pos++
-		for j := 0; j < w-2; j++ {
-			conn.WriteRune(' ')
-		}
-		pos += w - 2
-		conn.WriteRune('╰')
-		pos++
-		if i < len(tabWidths)-1 {
-			conn.WriteRune('─') // gap between tabs
-			pos++
-		}
-	}
-	for pos < contentBoxWidth-1 {
-		conn.WriteRune('─')
-		pos++
-	}
-	conn.WriteRune('╮')
-	connLine := lipgloss.NewStyle().Foreground(accentColor).Render(conn.String())
+	tabBar := renderMainTabBar(m.tabs, m.activeTab, m.width, modeLabel, accentColor)
 
 	// If modal is active, render it as full-screen overlay.
 	if m.showModal {
@@ -739,7 +685,6 @@ func (m AppModel) View() string {
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		tabBar,
-		connLine,
 		contentBox,
 	)
 }
