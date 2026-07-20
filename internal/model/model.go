@@ -10,7 +10,7 @@ var ReservedNames = map[string]bool{
 	"add":    true,
 	"rm":     true,
 	"list":   true,
-	"ls":	  true,
+	"ls":     true,
 	"new":    true,
 	"create": true,
 	"edit":   true,
@@ -63,6 +63,26 @@ type Connection struct {
 	CreatedAt     string
 	UpdatedAt     string
 	Source        Source // runtime-only, not persisted to DB
+}
+
+// Group is a durable collection used to organize connections in the TUI.
+type Group struct {
+	ID   int64
+	Name string
+}
+
+// GroupWithCount is a group plus the number of connections in the active scope.
+type GroupWithCount struct {
+	Group
+	ConnectionCount int
+}
+
+// ConnectionRef is the durable identity used by group memberships. SourcePath
+// is empty for SQLite and the normalized configured file path for ssh_config.
+type ConnectionRef struct {
+	Source     Source
+	SourcePath string
+	Name       string
 }
 
 // SSHTarget returns user@host.

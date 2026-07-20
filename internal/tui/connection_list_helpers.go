@@ -41,6 +41,17 @@ func insertItemSorted(items []list.Item, conn model.Connection) []list.Item {
 
 // newConnectionList creates a styled list for connection items.
 func newConnectionList(items []list.Item, accentColor lipgloss.Color, width, height int) list.Model {
+	delegate := connectionListDelegate(accentColor)
+
+	l := list.New(items, delegate, width, max(1, height-6))
+	l.SetShowTitle(false)
+	l.SetShowHelp(false)
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	return l
+}
+
+func connectionListDelegate(accentColor lipgloss.Color) list.DefaultDelegate {
 	delegate := list.NewDefaultDelegate()
 	bullet := lipgloss.NormalBorder()
 	bullet.Left = "•"
@@ -55,11 +66,38 @@ func newConnectionList(items []list.Item, accentColor lipgloss.Color, width, hei
 	delegate.ShowDescription = false
 	delegate.SetHeight(1)
 	delegate.SetSpacing(0)
+	return delegate
+}
 
-	l := list.New(items, delegate, width, height-4)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
-	return l
+func selectedConnectionName(l list.Model) string {
+	item, ok := l.SelectedItem().(connectionItem)
+	if !ok {
+		return ""
+	}
+	return item.conn.Name
+}
+
+func selectConnectionByName(l *list.Model, name string) bool {
+	for index, item := range l.Items() {
+		connection, ok := item.(connectionItem)
+		if ok && connection.conn.Name == name {
+			l.Select(index)
+			return true
+		}
+	}
+	if len(l.Items()) > 0 {
+		l.Select(0)
+	}
+	return false
+}
+
+func connectionListView(l list.Model, filtered bool) string {
+	if len(l.Items()) > 0 {
+		return l.View()
+	}
+	message := "No existing connections yet"
+	if filtered {
+		message = "No matching connections"
+	}
+	return lipgloss.NewStyle().Italic(true).Render(message)
 }

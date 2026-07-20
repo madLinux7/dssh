@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,46 +9,35 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/madLinux7/dssh/internal/db"
 	"github.com/madLinux7/dssh/internal/model"
-	"github.com/madLinux7/dssh/internal/sshconfig"
 )
-
-// editedInfo carries old/new names so AppModel can sync all lists after an edit.
-type editedInfo struct {
-	oldName string
-	newName string
-	source  model.Source
-}
 
 // EditModel is the Bubble Tea model for the Edit tab.
 // It has two modes: list mode (select a connection) and form mode (edit fields).
 type EditModel struct {
 	// List mode
-	list      list.Model
-	filterBox FilterBox
-	allItems  []list.Item
+	list       list.Model
+	filterBox  FilterBox
+	allItems   []list.Item
+	groupNames map[string]bool
 
 	// Form mode
-	editing   bool
-	editingID int64
-	origConn  model.Connection
-	inputs    [fieldCount]textinput.Model
-	focused   int
-	authType  string
-	atSave    bool
+	editing  bool
+	origConn model.Connection
+	inputs   [fieldCount]textinput.Model
+	focused  int
+	authType string
+	atSave   bool
 
 	// Shared
-	database      *sql.DB
-	sshConfigDest string
-	lastEdited    *editedInfo
-	statusMsg     string
-	statusStyle   lipgloss.Style
-	width         int
-	height        int
+	statusMsg   string
+	statusStyle lipgloss.Style
+	width       int
+	height      int
+	active      bool
 }
 
-func newEditModel(conns []connectionItem, database *sql.DB, width, height int) EditModel {
+func newEditModel(conns []connectionItem, width, height int) EditModel {
 	items := make([]list.Item, len(conns))
 	for i, c := range conns {
 		items[i] = c
@@ -62,9 +50,9 @@ func newEditModel(conns []connectionItem, database *sql.DB, width, height int) E
 		filterBox: NewFilterBox(width, magenta),
 		allItems:  items,
 		inputs:    newEditInputs(),
-		database:  database,
 		width:     width,
 		height:    height,
+		active:    true,
 	}
 }
 
@@ -118,7 +106,6 @@ func newEditInputs() [fieldCount]textinput.Model {
 
 func (m *EditModel) enterEditMode(conn model.Connection) {
 	m.editing = true
-	m.editingID = conn.ID
 	m.origConn = conn
 	m.statusMsg = ""
 
@@ -186,7 +173,7 @@ func (m EditModel) prevField() (int, bool) {
 
 func (m *EditModel) updateFocus() {
 	for i := range m.inputs {
-		if i == m.focused && !m.atSave {
+		if i == m.focused && !m.atSave && m.active && m.editing {
 			m.inputs[i].Focus()
 			m.inputs[i].PromptStyle = focusedFieldStyle
 			m.inputs[i].TextStyle = focusedFieldStyle
@@ -199,8 +186,6 @@ func (m *EditModel) updateFocus() {
 }
 
 func (m EditModel) Update(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
-	m.lastEdited = nil
-
 	if m.editing {
 		return m.updateForm(msg)
 	}
@@ -308,6 +293,7 @@ func (m EditModel) updateForm(msg tea.Msg) (EditModel, *AppResult, tea.Cmd) {
 }
 
 func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
+	m.statusMsg = ""
 	name := m.inputs[fieldName].Value()
 	user := m.inputs[fieldUser].Value()
 	host := m.inputs[fieldHost].Value()
@@ -340,88 +326,41 @@ func (m EditModel) handleSave() (EditModel, *AppResult, tea.Cmd) {
 		return m, nil, nil
 	}
 
-	// Password auth with new password → needs passphrase modal via AppModel.
-	if m.authType == "password" && password != "" {
-		origConn := m.origConn
-		return m, &AppResult{
-			Action:     ActionEdited,
-			Connection: &origConn,
-			WizardResult: &WizardResult{
-				Name:         name,
-				User:         user,
-				Host:         host,
-				Port:         portStr,
-				Directory:    m.inputs[fieldDirectory].Value(),
-				AuthType:     m.authType,
-				IdentityFile: m.inputs[fieldIdentityFile].Value(),
-				ProxyJump:    m.inputs[fieldProxyJump].Value(),
-				Password:     password,
-			},
-		}, nil
-	}
-
-	// Direct save: key auth, or password auth with unchanged password.
-	conn := &model.Connection{
-		ID:       m.editingID,
-		Name:     name,
-		User:     user,
-		Host:     host,
-		Port:     port,
-		AuthType: model.AuthType(m.authType),
-	}
-
-	conn.Directory = m.inputs[fieldDirectory].Value()
-	conn.ProxyJump = m.inputs[fieldProxyJump].Value()
-
-	if m.authType == "key" {
-		idf := m.inputs[fieldIdentityFile].Value()
-		if idf != "" && idf != "default" {
-			conn.IdentityFile = expandTildeTUI(idf)
-		}
-	}
-
-	// Preserve existing encrypted password when not changed.
-	if m.authType == "password" {
-		conn.EncryptedPass = m.origConn.EncryptedPass
-		conn.PassNonce = m.origConn.PassNonce
-	}
-
-	if m.origConn.Source == model.SourceSSHConfig {
-		if err := sshconfig.Update(m.sshConfigDest, m.origConn.Name, conn); err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			return m, nil, nil
-		}
-	} else {
-		if err := db.Update(m.database, conn); err != nil {
-			m.statusMsg = fmt.Sprintf("Error: %s", err)
-			m.statusStyle = lipgloss.NewStyle().Foreground(warnRed).Bold(true)
-			return m, nil, nil
-		}
-	}
-
-	oldName := m.origConn.Name
-	m.lastEdited = &editedInfo{oldName: oldName, newName: name, source: m.origConn.Source}
-	m.editing = false
-	return m, nil, nil
+	origConn := m.origConn
+	return m, &AppResult{
+		Action:     ActionEdited,
+		Connection: &origConn,
+		WizardResult: &WizardResult{
+			Name:         name,
+			User:         user,
+			Host:         host,
+			Port:         portStr,
+			Directory:    m.inputs[fieldDirectory].Value(),
+			AuthType:     m.authType,
+			IdentityFile: m.inputs[fieldIdentityFile].Value(),
+			ProxyJump:    m.inputs[fieldProxyJump].Value(),
+			Password:     password,
+		},
+	}, nil
 }
 
 func (m *EditModel) applyFilter() {
+	selectedName := selectedConnectionName(m.list)
 	query := strings.ToLower(m.filterBox.Value())
-	if query == "" {
-		m.list.SetItems(m.allItems)
-		return
-	}
 	var filtered []list.Item
 	for _, item := range m.allItems {
 		if ci, ok := item.(connectionItem); ok {
+			if m.groupNames != nil && !m.groupNames[ci.conn.Name] {
+				continue
+			}
 			label := strings.ToLower(ci.conn.DisplayLabel())
-			if strings.Contains(label, query) {
+			if query == "" || strings.Contains(label, query) {
 				filtered = append(filtered, item)
 			}
 		}
 	}
 	m.list.SetItems(filtered)
+	selectConnectionByName(&m.list, selectedName)
 }
 
 func (m EditModel) View() string {
@@ -432,15 +371,17 @@ func (m EditModel) View() string {
 }
 
 func (m EditModel) viewList() string {
-	title := titleStyle.Foreground(magenta).Render("Edit Connection")
-	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", m.list.View())
+	title := paneTitleStyle(m.active).Render("Edit Connection")
+	listView := connectionListView(m.list, m.filterBox.Value() != "" || m.groupNames != nil)
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", listView)
 }
 
 func (m EditModel) viewForm() string {
 	var b strings.Builder
+	compact := m.height <= 14
 
-	b.WriteString(titleStyle.Foreground(magenta).Render("Edit Connection"))
-	b.WriteString("\n\n")
+	b.WriteString(paneTitleStyle(m.active).MarginBottom(0).Render("Edit Connection"))
+	b.WriteString("\n")
 
 	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password", "ProxyJump"}
 
@@ -449,36 +390,62 @@ func (m EditModel) viewForm() string {
 		b.WriteString(fmt.Sprintf("%s %s\n", label, m.inputs[i].View()))
 	}
 
-	b.WriteString("\n")
+	if !compact {
+		b.WriteString("\n")
+	}
 	authLabel := labelStyle.Render("Auth Type")
 	authHint := blurredFieldStyle.Render("  (ctrl+t to toggle)")
 	if m.origConn.Source == model.SourceSSHConfig {
 		authHint = statusStyle.Render("  (locked: ssh_config entry)")
 	}
-	b.WriteString(fmt.Sprintf("%s %s%s\n\n", authLabel, focusedFieldStyle.Render(m.authType), authHint))
+	b.WriteString(fmt.Sprintf("%s %s%s\n", authLabel, paneAccentStyle(m.active).Render(m.authType), authHint))
+	if !compact {
+		b.WriteString("\n")
+	}
 
 	if m.atSave {
-		b.WriteString(focusedFieldStyle.Render("[ Save ]"))
+		b.WriteString(paneAccentStyle(m.active).Render("[ Save ]"))
 	} else {
 		b.WriteString(blurredFieldStyle.Render("[ Save ]"))
 	}
 
-	if m.statusMsg != "" {
-		b.WriteString("\n\n")
-		b.WriteString(m.statusStyle.Render(m.statusMsg))
-	}
-
-	b.WriteString("\n\n")
-	b.WriteString(statusStyle.Render(model.BuildHints(model.HintEscCancel, model.HintNav, model.HintToggleAuth, model.HintEnterNextSave)))
-
 	return b.String()
+}
+
+func (m *EditModel) SetActive(active bool) {
+	m.active = active
+	m.filterBox.SetActive(active && !m.editing)
+	accent := purple
+	if active {
+		accent = magenta
+	}
+	m.list.SetDelegate(connectionListDelegate(accent))
+	m.updateFocus()
+}
+
+func (m *EditModel) SetFilterValue(value string) {
+	m.filterBox.SetValue(value)
+	m.applyFilter()
+}
+
+func (m EditModel) FilterValue() string       { return m.filterBox.Value() }
+func (m EditModel) SelectedName() string      { return selectedConnectionName(m.list) }
+func (m *EditModel) SelectByName(name string) { selectConnectionByName(&m.list, name) }
+
+func (m *EditModel) SetGroupNames(names map[string]bool) {
+	m.groupNames = names
+	m.applyFilter()
 }
 
 func (m *EditModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.filterBox.SetWidth(w)
-	m.list.SetSize(w, h-4)
+	m.list.SetSize(w, max(1, h-6))
+	inputWidth := max(8, w-labelStyle.GetWidth()-2)
+	for i := range m.inputs {
+		m.inputs[i].Width = inputWidth
+	}
 }
 
 // AddItem inserts a connection in ascending alphabetical position.

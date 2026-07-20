@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -87,6 +88,22 @@ func sshConfigPath() (string, error) {
 		return sshconfig.MainFilePath()
 	}
 	return runtimeCfg.SSHConfigDest, nil
+}
+
+func sshConfigMembershipRef(name string) (model.ConnectionRef, error) {
+	path, err := sshConfigPath()
+	if err != nil {
+		return model.ConnectionRef{}, err
+	}
+	absolute, err := filepath.Abs(path)
+	if err == nil {
+		path = absolute
+	}
+	return model.ConnectionRef{
+		Source:     model.SourceSSHConfig,
+		SourcePath: filepath.Clean(path),
+		Name:       name,
+	}, nil
 }
 
 func listSQLiteConnections() ([]model.Connection, error) {

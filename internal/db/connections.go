@@ -17,6 +17,14 @@ var ErrNotFound = errors.New("connection not found")
 
 // Insert adds a new connection to the database.
 func Insert(db *sql.DB, c *model.Connection) error {
+	return insertConnection(db, c)
+}
+
+type connectionExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func insertConnection(execer connectionExecer, c *model.Connection) error {
 	encPass := c.EncryptedPass
 	if encPass == nil {
 		encPass = []byte{}
@@ -25,7 +33,7 @@ func Insert(db *sql.DB, c *model.Connection) error {
 	if nonce == nil {
 		nonce = []byte{}
 	}
-	_, err := db.Exec(`
+	result, err := execer.Exec(`
 		INSERT INTO connections (name, user, host, port, directory, auth_type, identity_file, proxy_jump, encrypted_pass, pass_nonce)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.Name, c.User, c.Host, c.Port, c.Directory, string(c.AuthType), c.IdentityFile, c.ProxyJump, encPass, nonce,
@@ -35,6 +43,9 @@ func Insert(db *sql.DB, c *model.Connection) error {
 			return fmt.Errorf("%w: %q", ErrDuplicateName, c.Name)
 		}
 		return fmt.Errorf("insert connection: %w", err)
+	}
+	if id, idErr := result.LastInsertId(); idErr == nil {
+		c.ID = id
 	}
 	return nil
 }
@@ -78,6 +89,10 @@ func List(db *sql.DB) ([]model.Connection, error) {
 
 // Update modifies an existing connection identified by ID.
 func Update(db *sql.DB, c *model.Connection) error {
+	return updateConnection(db, c)
+}
+
+func updateConnection(execer connectionExecer, c *model.Connection) error {
 	encPass := c.EncryptedPass
 	if encPass == nil {
 		encPass = []byte{}
@@ -86,7 +101,7 @@ func Update(db *sql.DB, c *model.Connection) error {
 	if nonce == nil {
 		nonce = []byte{}
 	}
-	_, err := db.Exec(`
+	result, err := execer.Exec(`
 		UPDATE connections
 		SET name=?, user=?, host=?, port=?, directory=?, auth_type=?,
 		    identity_file=?, proxy_jump=?, encrypted_pass=?, pass_nonce=?, updated_at=datetime('now')
@@ -100,18 +115,34 @@ func Update(db *sql.DB, c *model.Connection) error {
 		}
 		return fmt.Errorf("update connection: %w", err)
 	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return fmt.Errorf("%w: %q", ErrNotFound, c.Name)
+	}
 	return nil
 }
 
 // Delete removes a connection by name.
 func Delete(db *sql.DB, name string) error {
-	res, err := db.Exec("DELETE FROM connections WHERE name = ?", name)
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin delete connection: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`
+		DELETE FROM connection_group_memberships
+		WHERE source = ? AND source_path = '' AND connection_name = ?`, model.SourceSQLite, name); err != nil {
+		return fmt.Errorf("delete connection memberships: %w", err)
+	}
+	res, err := tx.Exec("DELETE FROM connections WHERE name = ?", name)
 	if err != nil {
 		return fmt.Errorf("delete connection: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		return fmt.Errorf("%w: %q", ErrNotFound, name)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete connection: %w", err)
 	}
 	return nil
 }

@@ -27,6 +27,7 @@ type DeleteModel struct {
 	list              list.Model
 	filterBox         FilterBox
 	allItems          []list.Item
+	groupNames        map[string]bool
 	database          *sql.DB
 	confirmTarget     int64
 	confirmCount      int
@@ -37,6 +38,7 @@ type DeleteModel struct {
 	statusStyle       lipgloss.Style
 	width             int
 	height            int
+	active            bool
 }
 
 func newDeleteModel(conns []connectionItem, database *sql.DB, width, height int) DeleteModel {
@@ -54,6 +56,7 @@ func newDeleteModel(conns []connectionItem, database *sql.DB, width, height int)
 		database:  database,
 		width:     width,
 		height:    height,
+		active:    true,
 	}
 }
 
@@ -178,39 +181,64 @@ func (m DeleteModel) Update(msg tea.Msg) (DeleteModel, *AppResult, tea.Cmd) {
 
 // applyFilter updates the list to show only items matching the current filter text.
 func (m *DeleteModel) applyFilter() {
+	selectedName := selectedConnectionName(m.list)
 	query := strings.ToLower(m.filterBox.Value())
-	if query == "" {
-		m.list.SetItems(m.allItems)
-		return
-	}
 	var filtered []list.Item
 	for _, item := range m.allItems {
 		if ci, ok := item.(connectionItem); ok {
+			if m.groupNames != nil && !m.groupNames[ci.conn.Name] {
+				continue
+			}
 			label := strings.ToLower(ci.conn.DisplayLabel())
-			if strings.Contains(label, query) {
+			if query == "" || strings.Contains(label, query) {
 				filtered = append(filtered, item)
 			}
 		}
 	}
 	m.list.SetItems(filtered)
+	selectConnectionByName(&m.list, selectedName)
 }
 
 func (m DeleteModel) View() string {
-	title := titleStyle.Foreground(warnOrange).Render("Delete Connection")
-	listView := m.list.View()
-
-	if m.statusMsg != "" {
-		listView += "\n" + m.statusStyle.Render(m.statusMsg)
+	titleStyle := paneTitleStyle(m.active)
+	if m.active {
+		titleStyle = titleStyle.Foreground(warnOrange)
 	}
-
+	title := titleStyle.Render("Delete Connection")
+	listView := connectionListView(m.list, m.filterBox.Value() != "" || m.groupNames != nil)
 	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", listView)
+}
+
+func (m *DeleteModel) SetActive(active bool) {
+	m.active = active
+	m.filterBox.SetActive(active)
+	m.filterBox.SetAccentColor(warnOrange)
+	accent := purple
+	if active {
+		accent = warnOrange
+	}
+	m.list.SetDelegate(connectionListDelegate(accent))
+}
+
+func (m *DeleteModel) SetFilterValue(value string) {
+	m.filterBox.SetValue(value)
+	m.applyFilter()
+}
+
+func (m DeleteModel) FilterValue() string       { return m.filterBox.Value() }
+func (m DeleteModel) SelectedName() string      { return selectedConnectionName(m.list) }
+func (m *DeleteModel) SelectByName(name string) { selectConnectionByName(&m.list, name) }
+
+func (m *DeleteModel) SetGroupNames(names map[string]bool) {
+	m.groupNames = names
+	m.applyFilter()
 }
 
 func (m *DeleteModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.filterBox.SetWidth(w)
-	m.list.SetSize(w, h-4)
+	m.list.SetSize(w, max(1, h-6))
 }
 
 // AddItem inserts a connection in ascending alphabetical position.

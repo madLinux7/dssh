@@ -152,6 +152,12 @@ func (m PassphraseModal) updateFocus() PassphraseModal {
 }
 
 func (m PassphraseModal) View() string {
+	box := m.BoxView()
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
+// BoxView renders only the dialog box so AppModel can composite it over the panes.
+func (m PassphraseModal) BoxView() string {
 	var b strings.Builder
 
 	// Title.
@@ -190,11 +196,7 @@ func (m PassphraseModal) View() string {
 
 	inner := b.String()
 
-	// The modal box.
-	box := modalBoxStyle.Render(inner)
-
-	// Center the box on screen.
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	return modalBoxStyle.Render(inner)
 }
 
 func (m *PassphraseModal) SetSize(w, h int) {

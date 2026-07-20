@@ -24,6 +24,7 @@ type WizardResult struct {
 	ProxyJump    string
 	Password     string
 	SaveTo       model.SaveTarget // "sqlite" or "ssh_config" (only relevant in "both" mode)
+	GroupIDs     []int64
 }
 
 // AppResult is returned from the TUI to the CLI layer.

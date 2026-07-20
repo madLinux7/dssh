@@ -11,11 +11,13 @@ import (
 
 // ConnectModel is the Bubble Tea model for the Connect tab.
 type ConnectModel struct {
-	list      list.Model
-	filterBox FilterBox
-	allItems  []list.Item
-	width     int
-	height    int
+	list       list.Model
+	filterBox  FilterBox
+	allItems   []list.Item
+	groupNames map[string]bool
+	width      int
+	height     int
+	active     bool
 }
 
 func newConnectModel(conns []model.Connection, width, height int) ConnectModel {
@@ -32,6 +34,7 @@ func newConnectModel(conns []model.Connection, width, height int) ConnectModel {
 		allItems:  items,
 		width:     width,
 		height:    height,
+		active:    true,
 	}
 }
 
@@ -78,33 +81,59 @@ func (m ConnectModel) Update(msg tea.Msg) (ConnectModel, *AppResult, tea.Cmd) {
 
 // applyFilter updates the list to show only items matching the current filter text.
 func (m *ConnectModel) applyFilter() {
+	selectedName := selectedConnectionName(m.list)
 	query := strings.ToLower(m.filterBox.Value())
-	if query == "" {
-		m.list.SetItems(m.allItems)
-		return
-	}
 	var filtered []list.Item
 	for _, item := range m.allItems {
 		if ci, ok := item.(connectionItem); ok {
+			if m.groupNames != nil && !m.groupNames[ci.conn.Name] {
+				continue
+			}
 			label := strings.ToLower(ci.conn.DisplayLabel())
-			if strings.Contains(label, query) {
+			if query == "" || strings.Contains(label, query) {
 				filtered = append(filtered, item)
 			}
 		}
 	}
 	m.list.SetItems(filtered)
+	selectConnectionByName(&m.list, selectedName)
 }
 
 func (m ConnectModel) View() string {
-	title := titleStyle.Render("Select Connection")
-	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", m.list.View())
+	title := paneTitleStyle(m.active).Render("Select Connection")
+	listView := connectionListView(m.list, m.filterBox.Value() != "" || m.groupNames != nil)
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.filterBox.View(), "", listView)
+}
+
+func (m *ConnectModel) SetActive(active bool) {
+	m.active = active
+	m.filterBox.SetActive(active)
+	accent := purple
+	if active {
+		accent = magenta
+	}
+	m.list.SetDelegate(connectionListDelegate(accent))
+}
+
+func (m *ConnectModel) SetFilterValue(value string) {
+	m.filterBox.SetValue(value)
+	m.applyFilter()
+}
+
+func (m ConnectModel) FilterValue() string       { return m.filterBox.Value() }
+func (m ConnectModel) SelectedName() string      { return selectedConnectionName(m.list) }
+func (m *ConnectModel) SelectByName(name string) { selectConnectionByName(&m.list, name) }
+
+func (m *ConnectModel) SetGroupNames(names map[string]bool) {
+	m.groupNames = names
+	m.applyFilter()
 }
 
 func (m *ConnectModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.filterBox.SetWidth(w)
-	m.list.SetSize(w, h-4)
+	m.list.SetSize(w, max(1, h-6))
 }
 
 // AddItem inserts a connection in ascending alphabetical position.

@@ -103,3 +103,22 @@ var (
 			Foreground(warnRed).
 			Bold(true)
 )
+
+func paneTitleStyle(active bool) lipgloss.Style {
+	color := purple
+	if active {
+		color = magenta
+	}
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Bold(active).
+		MarginBottom(1)
+}
+
+func paneAccentStyle(active bool) lipgloss.Style {
+	color := purple
+	if active {
+		color = magenta
+	}
+	return lipgloss.NewStyle().Foreground(color).Bold(active)
+}

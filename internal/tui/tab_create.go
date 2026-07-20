@@ -32,6 +32,7 @@ type CreateModel struct {
 	cfg      *model.RuntimeConfig
 	width    int
 	height   int
+	active   bool
 }
 
 func newCreateModel(width, height int) CreateModel {
@@ -89,6 +90,7 @@ func newCreateModel(width, height int) CreateModel {
 		saveTo:   model.SaveTargetSQLite,
 		width:    width,
 		height:   height,
+		active:   true,
 	}
 }
 
@@ -302,7 +304,7 @@ func (m CreateModel) toggleSaveTo() CreateModel {
 
 func (m CreateModel) updateFocus() CreateModel {
 	for i := range m.inputs {
-		if i == m.focused && !m.atSave && !m.atSaveTo {
+		if i == m.focused && !m.atSave && !m.atSaveTo && m.active {
 			m.inputs[i].Focus()
 			m.inputs[i].PromptStyle = focusedFieldStyle
 			m.inputs[i].TextStyle = focusedFieldStyle
@@ -317,9 +319,10 @@ func (m CreateModel) updateFocus() CreateModel {
 
 func (m CreateModel) View() string {
 	var b strings.Builder
+	compact := m.height <= 14
 
-	b.WriteString(titleStyle.Render("New Connection"))
-	b.WriteString("\n\n")
+	b.WriteString(paneTitleStyle(m.active).MarginBottom(0).Render("New Connection"))
+	b.WriteString("\n")
 
 	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password", "ProxyJump"}
 
@@ -328,7 +331,9 @@ func (m CreateModel) View() string {
 		b.WriteString(fmt.Sprintf("%s %s\n", label, m.inputs[i].View()))
 	}
 
-	b.WriteString("\n")
+	if !compact {
+		b.WriteString("\n")
+	}
 
 	// Auth Type line.
 	authLabel := labelStyle.Render("Auth Type")
@@ -337,11 +342,13 @@ func (m CreateModel) View() string {
 	if isSSHConfigOnly {
 		authHint = statusStyle.Render("  (locked: no passwords in ssh_config mode)")
 	}
-	b.WriteString(fmt.Sprintf("%s %s%s\n", authLabel, focusedFieldStyle.Render(m.authType), authHint))
+	b.WriteString(fmt.Sprintf("%s %s%s\n", authLabel, paneAccentStyle(m.active).Render(m.authType), authHint))
 
 	// Save To (only in "both" mode).
 	if m.showSaveTo() {
-		b.WriteString("\n")
+		if !compact {
+			b.WriteString("\n")
+		}
 		saveLabel := labelStyle.Render("Save To")
 		pad := labelStyle.Render("")
 
@@ -349,34 +356,37 @@ func (m CreateModel) View() string {
 		sqliteStyle, sshStyle := blurredFieldStyle, blurredFieldStyle
 		if m.saveTo == model.SaveTargetSQLite {
 			sqliteRadio = "●"
-			sqliteStyle = focusedFieldStyle
+			sqliteStyle = paneAccentStyle(m.active)
 		} else {
 			sshRadio = "●"
-			sshStyle = focusedFieldStyle
+			sshStyle = paneAccentStyle(m.active)
 		}
-		if m.atSaveTo {
-			sqliteStyle = focusedFieldStyle
-			sshStyle = focusedFieldStyle
+		if m.atSaveTo && m.active {
+			sqliteStyle = paneAccentStyle(true)
+			sshStyle = paneAccentStyle(true)
 		}
 
 		hint := ""
 		if m.authType == "password" {
 			hint = statusStyle.Render("  (locked: passwords only in SQLite)")
 		}
-		b.WriteString(fmt.Sprintf("%s %s %s%s\n", saveLabel, sqliteStyle.Render(sqliteRadio), sqliteStyle.Render("SQLite"), hint))
-		b.WriteString(fmt.Sprintf("%s %s %s\n", pad, sshStyle.Render(sshRadio), sshStyle.Render("ssh_config")))
+		if compact {
+			b.WriteString(fmt.Sprintf("%s %s %s  %s %s\n", saveLabel, sqliteStyle.Render(sqliteRadio), sqliteStyle.Render("SQLite"), sshStyle.Render(sshRadio), sshStyle.Render("ssh_config")))
+		} else {
+			b.WriteString(fmt.Sprintf("%s %s %s%s\n", saveLabel, sqliteStyle.Render(sqliteRadio), sqliteStyle.Render("SQLite"), hint))
+			b.WriteString(fmt.Sprintf("%s %s %s\n", pad, sshStyle.Render(sshRadio), sshStyle.Render("ssh_config")))
+		}
 	}
 
-	b.WriteString("\n")
+	if !compact {
+		b.WriteString("\n")
+	}
 
 	if m.atSave {
-		b.WriteString(focusedFieldStyle.Render("[ Save ]"))
+		b.WriteString(paneAccentStyle(m.active).Render("[ Save ]"))
 	} else {
 		b.WriteString(blurredFieldStyle.Render("[ Save ]"))
 	}
-
-	b.WriteString("\n\n")
-	b.WriteString(statusStyle.Render(model.BuildHints(model.HintEscCancel, model.HintNav, model.HintToggleAuth, model.HintEnterNextSave)))
 
 	return b.String()
 }
@@ -384,4 +394,13 @@ func (m CreateModel) View() string {
 func (m *CreateModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
+	inputWidth := max(8, w-labelStyle.GetWidth()-2)
+	for i := range m.inputs {
+		m.inputs[i].Width = inputWidth
+	}
+}
+
+func (m *CreateModel) SetActive(active bool) {
+	m.active = active
+	*m = m.updateFocus()
 }

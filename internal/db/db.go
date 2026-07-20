@@ -2,8 +2,8 @@
 //
 // Uses a pure-Go SQLite driver (modernc.org/sqlite) so the binary can be
 // built with CGO_ENABLED=0 for fully static, cross-platform binaries.
-// Two tables: connections (SSH connection configs) and settings (key-value store
-// for crypto salt and passphrase verification token).
+// Connections and settings live alongside durable group metadata and scoped
+// connection-to-group memberships.
 package db
 
 import (
@@ -36,6 +36,25 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value BLOB NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS connection_groups (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    normalized_name TEXT NOT NULL UNIQUE,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS connection_group_memberships (
+    group_id        INTEGER NOT NULL REFERENCES connection_groups(id) ON DELETE CASCADE,
+    source          TEXT    NOT NULL,
+    source_path     TEXT    NOT NULL DEFAULT '',
+    connection_name TEXT    NOT NULL,
+    PRIMARY KEY (group_id, source, source_path, connection_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_connection_group_memberships_connection
+    ON connection_group_memberships(source, source_path, connection_name);
 `
 
 // Open opens or creates the SQLite database at ~/.dssh/dssh.db and runs migrations.
@@ -61,18 +80,27 @@ func Open() (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("set WAL mode: %w", err)
 	}
-
-	if _, err := db.Exec(schema); err != nil {
+	if err := Initialize(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("migrate schema: %w", err)
-	}
-
-	if err := migrate(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("migrate: %w", err)
+		return nil, err
 	}
 
 	return db, nil
+}
+
+// Initialize creates and migrates the schema on an already-open database.
+// It is also the supported setup seam for isolated in-memory tests.
+func Initialize(db *sql.DB) error {
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		return fmt.Errorf("enable foreign keys: %w", err)
+	}
+	if _, err := db.Exec(schema); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+	if err := migrate(db); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
 }
 
 // migrate applies idempotent column additions for databases created by older
@@ -92,10 +120,10 @@ func addColumnIfMissing(db *sql.DB, table, column, columnDef string) error {
 
 	for rows.Next() {
 		var (
-			cid           int
-			name, ctype   string
-			notnull, pk   int
-			dfltValue     any
+			cid         int
+			name, ctype string
+			notnull, pk int
+			dfltValue   any
 		)
 		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
 			return fmt.Errorf("scan %s column: %w", table, err)

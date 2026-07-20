@@ -22,8 +22,9 @@ func NewFilterBox(width int, promptColor lipgloss.Color) FilterBox {
 	input.Width = filterInputWidth(width)
 	input.Focus()
 	input.PromptStyle = lipgloss.NewStyle().
-						Foreground(promptColor).
-						Bold(true)
+		Foreground(promptColor).
+		Bold(true)
+	input.Cursor.Style = lipgloss.NewStyle().Foreground(promptColor)
 
 	return FilterBox{input: input, width: width}
 }
@@ -66,6 +67,24 @@ func (f *FilterBox) SetValue(s string) {
 func (f *FilterBox) SetWidth(w int) {
 	f.width = w
 	f.input.Width = filterInputWidth(w)
+}
+
+// SetActive controls whether the filter accepts input and how its prompt is styled.
+func (f *FilterBox) SetActive(active bool) {
+	color := purple
+	if active {
+		color = magenta
+		f.input.Focus()
+	} else {
+		f.input.Blur()
+	}
+	f.input.PromptStyle = lipgloss.NewStyle().Foreground(color).Bold(active)
+	f.input.Cursor.Style = lipgloss.NewStyle().Foreground(color)
+}
+
+func (f *FilterBox) SetAccentColor(color lipgloss.Color) {
+	f.input.PromptStyle = f.input.PromptStyle.Foreground(color)
+	f.input.Cursor.Style = f.input.Cursor.Style.Foreground(color)
 }
 
 func filterInputWidth(outerWidth int) int {

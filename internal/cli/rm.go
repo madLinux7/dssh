@@ -23,7 +23,7 @@ func newRmCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := sshconfig.Delete(p, name); err != nil {
+				if err := deleteSSHConfigConnection(p, name); err != nil {
 					return err
 				}
 				success("Removed connection %q from ssh_config", name)
@@ -51,7 +51,7 @@ func newRmCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := sshconfig.Delete(p, name); err != nil {
+				if err := deleteSSHConfigConnection(p, name); err != nil {
 					return err
 				}
 				success("Removed connection %q from ssh_config", name)
@@ -85,7 +85,7 @@ func rmBothPrompt(name string) error {
 		if err != nil {
 			return err
 		}
-		if err := sshconfig.Delete(p, name); err != nil {
+		if err := deleteSSHConfigConnection(p, name); err != nil {
 			return err
 		}
 		success("Removed connection %q from ssh_config", name)
@@ -97,12 +97,33 @@ func rmBothPrompt(name string) error {
 		if err != nil {
 			return err
 		}
-		if err := sshconfig.Delete(p, name); err != nil {
+		if err := deleteSSHConfigConnection(p, name); err != nil {
 			return err
 		}
 		success("Removed connection %q from both SQLite and ssh_config", name)
 	default: // Abort or cancel
 		fmt.Println("Aborted.")
+	}
+	return nil
+}
+
+func deleteSSHConfigConnection(path, name string) error {
+	ref, err := sshConfigMembershipRef(name)
+	if err != nil {
+		return fmt.Errorf("resolve ssh_config group assignments: %w", err)
+	}
+	groupIDs, err := db.GroupIDsForConnection(sharedDB, ref)
+	if err != nil {
+		return fmt.Errorf("read ssh_config group assignments: %w", err)
+	}
+	if err := db.DeleteConnectionMemberships(sharedDB, ref); err != nil {
+		return fmt.Errorf("clean up ssh_config group assignments: %w", err)
+	}
+	if err := sshconfig.Delete(path, name); err != nil {
+		if restoreErr := db.SetConnectionGroups(sharedDB, ref, groupIDs); restoreErr != nil {
+			return fmt.Errorf("delete ssh_config connection: %w (group assignment rollback failed: %v)", err, restoreErr)
+		}
+		return err
 	}
 	return nil
 }

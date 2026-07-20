@@ -68,6 +68,7 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 - **Instant connect** 🚀 — `dssh myserver` and you're in
 - **Create Wizard** 🪄 — easily add new connections without memorizing flags
 - **Edit** ✏️ — no need to delete and re-add connections, just edit them
+- **Connection groups** 🗂️ — organize connections into multiple groups and filter every management tab instantly
 
 Also:
 
@@ -97,7 +98,7 @@ dssh is a thin wrapper around your system's `ssh` binary:
 
 - **Key auth** — `syscall.Exec` replaces the dssh process with ssh (zero overhead, full terminal control)
 - **Password auth** — ssh runs as a child process with `SSH_ASKPASS` to supply the decrypted password (no `sshpass` needed)
-- **Data** — connections stored in SQLite (`~/.dssh/dssh.db`), your `ssh_config` file, or both
+- **Data** — connections stored in SQLite (`~/.dssh/dssh.db`), your `ssh_config` file, or both; groups and assignments are stored as SQLite metadata
 - **Crypto** — AES-256-GCM encryption with Argon2id key derivation for stored passwords
 
 More on the [security model](https://dssh.grolmes.com/guides/security/) and [configuration](https://dssh.grolmes.com/reference/config/) in the docs.
@@ -149,13 +150,22 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 
 | Key | Action |
 |---|---|
-| `Tab` / `Shift+Tab` | Switch between tabs (always), or move between form fields (Create / Edit) |
+| `Tab` / `Shift+Tab` | Switch between the left connection pane and right group pane |
 | `←` / `→` | Switch between tabs (Connect / Edit list / Delete always; Create / Edit forms when on an empty field, the Save button, or the Save-To toggle) |
 | `↑` / `↓` | Navigate lists / move between form fields |
 | `Enter` | Select / confirm |
+| `Space` | Toggle a group assignment in Create / Edit |
+| `Ctrl+N` | Create a group from the right pane |
+| `Ctrl+R` | Rename the selected group |
+| `Ctrl+D` | Delete the selected group (connections are kept) |
 | `Ctrl+L` | Toggle SQLite / ssh_config list (both mode) |
 | `Ctrl+T` | Toggle key / password auth (create/edit) |
+| `Ctrl+S` | Save a new or edited connection from either pane |
 | `ESC` / `Ctrl+C` | Quit |
+
+The right pane filters the connection list as soon as you select a group. Selecting `(No Groups)` shows all connections.
+
+A terminal size of at least `80×20` is required.
 
 ### Quick start - Let's Go!
 
@@ -291,7 +301,7 @@ parse_both_default_save_target:  sqlite
 
 ### Reset everything
 
-Wipe all saved connections, encrypted passwords, and settings (deletes the SQLite database). Requires two confirmations to prevent accidents.
+Wipe all saved connections, encrypted passwords, groups, assignments, and settings (deletes the SQLite database). Requires two confirmations to prevent accidents.
 
 ```sh
 dssh reset
