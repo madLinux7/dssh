@@ -184,6 +184,39 @@ func TestMinimumSupportedSizeKeepsFormSaveAndBottomHintsVisible(t *testing.T) {
 	}
 }
 
+func TestHintsTogglePersistsAndRestores(t *testing.T) {
+	d := newTUITestDB(t)
+	app := newAppModel(nil, d, TabConnect, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})
+	if !app.showHints || !strings.Contains(ansi.Strip(app.View()), "ENTER connect") {
+		t.Fatalf("new app did not show default hints:\n%s", ansi.Strip(app.View()))
+	}
+
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	plain := ansi.Strip(app.View())
+	if app.showHints || !strings.Contains(plain, "? help") || strings.Contains(plain, "ENTER connect") || strings.Contains(plain, "CTRL+N new") {
+		t.Fatalf("hidden hints rendered incorrectly:\n%s", plain)
+	}
+	value, err := db.GetSetting(d, settingShowHints)
+	if err != nil || string(value) != "false" {
+		t.Fatalf("saved hidden hint setting = %q, err %v", value, err)
+	}
+
+	restored := newAppModel(nil, d, TabConnect, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	restored = updateApp(t, restored, tea.WindowSizeMsg{Width: 100, Height: 24})
+	if restored.showHints {
+		t.Fatal("new app did not restore hidden hints")
+	}
+	restored = updateApp(t, restored, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	if !restored.showHints || !strings.Contains(ansi.Strip(restored.View()), "ENTER connect") {
+		t.Fatalf("visible hints were not restored:\n%s", ansi.Strip(restored.View()))
+	}
+	value, err = db.GetSetting(d, settingShowHints)
+	if err != nil || string(value) != "true" {
+		t.Fatalf("saved visible hint setting = %q, err %v", value, err)
+	}
+}
+
 func TestPassphraseDialogIsCompositedOverCurrentPanes(t *testing.T) {
 	app := newAppModel(nil, nil, TabCreate, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
 	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})

@@ -41,6 +41,8 @@ const (
 	PaneRight
 )
 
+const settingShowHints = "tui_show_hints"
+
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
 	activeTab      Tab
@@ -58,6 +60,7 @@ type AppModel struct {
 	width          int
 	height         int
 	activePane     Pane
+	showHints      bool
 
 	// Session-level navigation shared by the connection tabs.
 	connectionQuery        string
@@ -125,10 +128,17 @@ func newAppModel(connections []model.Connection, d *sql.DB, initialTab Tab, cfg 
 		cfg:                         cfg,
 		activeSource:                model.SourceSQLite,
 		activePane:                  PaneLeft,
+		showHints:                   true,
 		groupPane:                   newGroupPaneModel(nil, 34, 12),
 		createAssignment:            newGroupAssignmentModel(nil, nil, 0, 34, 12),
 		editAssignment:              newGroupAssignmentModel(nil, nil, 0, 34, 12),
 		createAssignmentInitialized: initialTab == TabCreate,
+	}
+	
+	if d != nil {
+		if value, err := db.GetSetting(d, settingShowHints); err == nil && string(value) == "false" {
+			m.showHints = false
+		}
 	}
 
 	// Respect persisted view mode.
@@ -274,6 +284,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			m.result = &AppResult{Action: ActionNone}
 			return m, tea.Quit
+		case "?":
+			m = m.toggleHints()
+			return m, nil
 		case "ctrl+s":
 			switch {
 			case m.activeTab == TabCreate:
@@ -915,6 +928,10 @@ func (m AppModel) View() string {
 }
 
 func (m AppModel) leftPaneHints() string {
+	if !m.showHints {
+		return statusStyle.Render("? help")
+	}
+
 	var hints string
 	switch m.activeTab {
 	case TabConnect:
@@ -934,10 +951,26 @@ func (m AppModel) leftPaneHints() string {
 }
 
 func (m AppModel) rightPaneHints() string {
+	if !m.showHints {
+		return ""
+	}
+
 	if m.assignmentMode() {
 		return statusStyle.Render("TAB pane • ↑/↓ navigate • SPACE assign • CTRL+N new • CTRL+S save")
 	}
 	return statusStyle.Render("TAB pane • ↑/↓ navigate • CTRL+N new • CTRL+R rename • CTRL+D delete")
+}
+
+func (m AppModel) toggleHints() AppModel {
+	showHints := !m.showHints
+	if m.database != nil {
+		if err := db.SetSetting(m.database, settingShowHints, []byte(strconv.FormatBool(showHints))); err != nil {
+			m.setError("save hint visibility: %s", err)
+			return m
+		}
+	}
+	m.showHints = showHints
+	return m
 }
 
 // onConnectionEdited syncs all tab lists after an edit.
