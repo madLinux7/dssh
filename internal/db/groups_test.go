@@ -174,6 +174,51 @@ func TestSQLiteConnectionAndAssignmentsSaveAtomically(t *testing.T) {
 	}
 }
 
+func TestBatchMembershipChangesAreIdempotentAndAtomic(t *testing.T) {
+	d := newGroupTestDB(t)
+	group, err := CreateGroup(d, "Production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refA := model.ConnectionRef{Source: model.SourceSQLite, Name: "api"}
+	refB := model.ConnectionRef{Source: model.SourceSQLite, Name: "worker"}
+	if err := AssignConnections(d, group.ID, []model.ConnectionRef{refA, refA, refB}); err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []model.ConnectionRef{refA, refB} {
+		ids, err := GroupIDsForConnection(d, ref)
+		if err != nil || len(ids) != 1 || ids[0] != group.ID {
+			t.Fatalf("groups for %#v = %v, %v", ref, ids, err)
+		}
+	}
+	if err := UnassignConnections(d, group.ID, []model.ConnectionRef{refA, refA}); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := GroupIDsForConnection(d, refA)
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("groups after idempotent unassign = %v, %v", ids, err)
+	}
+	if err := AssignConnections(d, 99999, []model.ConnectionRef{refB}); err == nil {
+		t.Fatal("unknown group assignment succeeded")
+	}
+	ids, err = GroupIDsForConnection(d, refB)
+	if err != nil || len(ids) != 1 || ids[0] != group.ID {
+		t.Fatalf("failed batch changed membership = %v, %v", ids, err)
+	}
+}
+
+func TestGroupLookupIsCaseInsensitive(t *testing.T) {
+	d := newGroupTestDB(t)
+	created, err := CreateGroup(d, "Production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := GetGroupByName(d, " production ")
+	if err != nil || resolved.ID != created.ID {
+		t.Fatalf("case-insensitive lookup = %#v, %v", resolved, err)
+	}
+}
+
 func TestSQLiteEditAndAssignmentChangesSaveAtomically(t *testing.T) {
 	d := newGroupTestDB(t)
 	oldGroup, _ := CreateGroup(d, "Old")

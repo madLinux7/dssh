@@ -42,6 +42,9 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
   - [Delete (TUI)](#delete-tui)
   - [List connections (CLI)](#list-connections-cli)
   - [Remove a connection (CLI)](#remove-a-connection-cli)
+  - [Group Management](#group-management)
+    - [TUI](#tui)
+    - [CLI](#cli)
   - [Configure mode](#configure-mode)
   - [Reset everything](#reset-everything)
 - [Installation](#installation)
@@ -135,9 +138,16 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 | `dssh` | Launch interactive connection picker |
 | `dssh <name>` | Connect to a saved host by name |
 | `dssh <name> -- <args>` | Connect with extra args forwarded to ssh |
-| `dssh add [-p PORT] [-d DIR] [-J JUMP] <name> <target> [password]` | Save a new connection |
+| `dssh connect <name> -- <args>` | Explicitly connect by name (including a connection named `group`) |
+| `dssh add [-p PORT] [-d DIR] [-J JUMP] [--group GROUP] <name> <target> [password]` | Save a new connection |
 | `dssh rm <name>` | Delete a saved connection |
-| `dssh list` / `dssh ls` | List all saved connections |
+| `dssh list` / `dssh ls` | List connections; supports `--group`, `--ungrouped`, and `--json` |
+| `dssh group list [--json]` | List groups and source-scoped membership counts |
+| `dssh group create NAME` | Create a group |
+| `dssh group rename NAME NEW_NAME` | Rename a group |
+| `dssh group delete NAME` | Delete a group and its memberships (not connections) |
+| `dssh group assign GROUP CONNECTION...` | Assign connections to a group in one selected source |
+| `dssh group unassign GROUP CONNECTION...` | Remove connections from a group in one selected source |
 | `dssh create` / `dssh new` | Interactive form to create a connection |
 | `dssh edit` | Edit an existing connection |
 | `dssh delete` | Delete a connection (TUI, triple-confirm) |
@@ -172,6 +182,9 @@ A terminal size of at least `80×20` is required.
 ```sh
 # Add a connection (will use default pubkey identity)
 dssh add myserver root@192.168.1.10
+
+# Add it to an existing group
+dssh add --group Production myserver root@192.168.1.10
 
 # Connect
 dssh myserver
@@ -222,6 +235,9 @@ dssh myserver
 
 # Pass extra args to ssh
 dssh myserver -- -v -L 8080:localhost:80
+
+# Explicit form; use this if a connection is named "group"
+dssh connect myserver -- -v
 ```
 
 ### Create Wizard (TUI)
@@ -258,6 +274,10 @@ dssh delete
 ```sh
 dssh list
 dssh ls # alias
+
+# Filter by one or more groups, or return safe machine-readable fields
+dssh list --group Production --group Staging
+dssh list --ungrouped --json
 ```
 
 ```
@@ -275,6 +295,71 @@ skylink             root       skylink.vps     22     key       -           -
 dssh rm myserver
 ```
 Remove a connection instantly. No confirmation asked.
+
+### Group Management
+
+Groups are **optional organization.** A connection may be in one, multiple or no groups. Deleting a group removes its memberships, never connections.
+
+You need to create groups before you can use them. Names are case-insensitive.
+
+Groups are **source-aware**: Groups metadata is always stored in SQLite DB, including for `ssh_config` connections. The same connection name in each source can have different groups.
+
+#### TUI
+
+- **Connect & Delete Tabs**: use the right pane to filter groups
+- **Create Tab / Edit Connection**: press `Space` to toggle assignments and `Ctrl+S` to save. `Ctrl+N`, `Ctrl+R`, and `Ctrl+D` manage groups.
+- **Filtering**: The TUI’s `(No Groups)` means “show all”; CLI `--ungrouped` means only connections with no groups.
+
+#### CLI
+
+##### Basic Lifecycle
+
+```sh
+# Create "Production" group
+dssh group create Production
+# Rename "Production" group to "Live" (group names are case-insensitive)
+dssh group rename production Live
+# List groups with counts for the active source(s)
+dssh group list
+# List all groups in JSON format
+dssh group list --json
+
+# Add new connection "api" with user "deploy" and host "api.example" to existing group "Live"
+dssh add --group Live api deploy@api.example
+
+# Delete group "Live" (connection is not deleted)
+dssh group delete Live
+```
+
+##### Membership
+
+Batch assign/unassign is atomic - meaning all groups and all connections must exist or else the batch fails.
+
+```sh
+# Assign connections "api" & "worker" to group "Production"
+dssh group assign Production api worker
+# Unassign connections "api" & "worker" from group "Production"
+dssh group unassign Production worker
+```
+
+In `both` parse mode either `--sqlite` or `--sshconfig` is required.
+
+##### List connections by group
+
+```sh
+# List connections from groups "Production" and "Staging"
+dssh list --group Production --group Staging
+# List all ungrouped connections
+dssh list --ungrouped
+# List connections from group "Production" in JSON format
+dssh list --group Production --json
+```
+
+Repeat `--group` on `list` for OR filtering.
+
+```sh
+dssh connect group
+```
 
 ### Configure mode
 

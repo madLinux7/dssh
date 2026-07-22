@@ -74,6 +74,43 @@ func ListGroups(d *sql.DB) ([]model.Group, error) {
 	return groups, nil
 }
 
+// GetGroupByName returns a group by its case-insensitive name.
+func GetGroupByName(d *sql.DB, name string) (*model.Group, error) {
+	_, normalizedName, err := NormalizeGroupName(name)
+	if err != nil {
+		return nil, err
+	}
+	group := &model.Group{}
+	err = d.QueryRow(`SELECT id, name FROM connection_groups WHERE normalized_name = ?`, normalizedName).
+		Scan(&group.ID, &group.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("%w: group %q", ErrNotFound, name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get group %q: %w", name, err)
+	}
+	return group, nil
+}
+
+// GroupIDsByNames resolves every supplied group name before a caller mutates
+// anything. Repeated names resolve to one ID.
+func GroupIDsByNames(d *sql.DB, names []string) ([]int64, error) {
+	ids := make([]int64, 0, len(names))
+	seen := make(map[int64]struct{}, len(names))
+	for _, name := range names {
+		group, err := GetGroupByName(d, name)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seen[group.ID]; ok {
+			continue
+		}
+		seen[group.ID] = struct{}{}
+		ids = append(ids, group.ID)
+	}
+	return ids, nil
+}
+
 // RenameGroup changes a group name while preserving its identity and memberships.
 func RenameGroup(d *sql.DB, id int64, name string) error {
 	displayName, normalizedName, err := NormalizeGroupName(name)
@@ -132,6 +169,49 @@ func SetConnectionGroups(d *sql.DB, ref model.ConnectionRef, groupIDs []int64) e
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit group assignments: %w", err)
+	}
+	return nil
+}
+
+// AssignConnections adds a group membership for each reference atomically.
+// It is deliberately idempotent, and validates the group before starting the
+// write transaction.
+func AssignConnections(d *sql.DB, groupID int64, refs []model.ConnectionRef) error {
+	return changeConnectionMemberships(d, groupID, refs, true)
+}
+
+// UnassignConnections removes a group membership for each reference atomically.
+// Removing an absent membership is a successful no-op.
+func UnassignConnections(d *sql.DB, groupID int64, refs []model.ConnectionRef) error {
+	return changeConnectionMemberships(d, groupID, refs, false)
+}
+
+func changeConnectionMemberships(d *sql.DB, groupID int64, refs []model.ConnectionRef, assign bool) error {
+	var exists int
+	if err := d.QueryRow("SELECT 1 FROM connection_groups WHERE id = ?", groupID).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: group %d", ErrNotFound, groupID)
+		}
+		return fmt.Errorf("validate group: %w", err)
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		return fmt.Errorf("begin membership change: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, ref := range uniqueConnectionRefs(refs) {
+		if assign {
+			if _, err := tx.Exec(`INSERT OR IGNORE INTO connection_group_memberships
+				(group_id, source, source_path, connection_name) VALUES (?, ?, ?, ?)`, groupID, ref.Source, ref.SourcePath, ref.Name); err != nil {
+				return fmt.Errorf("assign connection to group: %w", err)
+			}
+		} else if _, err := tx.Exec(`DELETE FROM connection_group_memberships
+			WHERE group_id = ? AND source = ? AND source_path = ? AND connection_name = ?`, groupID, ref.Source, ref.SourcePath, ref.Name); err != nil {
+			return fmt.Errorf("unassign connection from group: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit membership change: %w", err)
 	}
 	return nil
 }
@@ -354,6 +434,29 @@ func ConnectionNamesForGroup(d *sql.DB, groupID int64, source model.Source, sour
 	return names, rows.Err()
 }
 
+// GroupNamesForConnections returns source-scoped group names by connection.
+// Connections with no memberships are absent from the returned map.
+func GroupNamesForConnections(d *sql.DB, source model.Source, sourcePath string) (map[string][]string, error) {
+	rows, err := d.Query(`SELECT m.connection_name, g.name
+		FROM connection_group_memberships m
+		JOIN connection_groups g ON g.id = m.group_id
+		WHERE m.source = ? AND m.source_path = ?
+		ORDER BY g.normalized_name DESC, g.id ASC`, source, sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("list scoped connection groups: %w", err)
+	}
+	defer rows.Close()
+	groups := make(map[string][]string)
+	for rows.Next() {
+		var connectionName, groupName string
+		if err := rows.Scan(&connectionName, &groupName); err != nil {
+			return nil, fmt.Errorf("scan scoped connection group: %w", err)
+		}
+		groups[connectionName] = append(groups[connectionName], groupName)
+	}
+	return groups, rows.Err()
+}
+
 func uniqueGroupIDs(ids []int64) []int64 {
 	seen := make(map[int64]struct{}, len(ids))
 	unique := make([]int64, 0, len(ids))
@@ -363,6 +466,19 @@ func uniqueGroupIDs(ids []int64) []int64 {
 		}
 		seen[id] = struct{}{}
 		unique = append(unique, id)
+	}
+	return unique
+}
+
+func uniqueConnectionRefs(refs []model.ConnectionRef) []model.ConnectionRef {
+	seen := make(map[model.ConnectionRef]struct{}, len(refs))
+	unique := make([]model.ConnectionRef, 0, len(refs))
+	for _, ref := range refs {
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		unique = append(unique, ref)
 	}
 	return unique
 }

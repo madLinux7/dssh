@@ -122,5 +122,12 @@ func listSSHConfigConnections() ([]model.Connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sshconfig.List(p)
+	conns, err := sshconfig.List(p)
+	if err != nil {
+		return nil, err
+	}
+	for i := range conns {
+		conns[i].Source = model.SourceSSHConfig
+	}
+	return conns, nil
 }

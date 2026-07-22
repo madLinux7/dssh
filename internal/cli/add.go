@@ -18,6 +18,7 @@ func newAddCmd() *cobra.Command {
 	var proxyJump string
 	var addToSQLite bool
 	var addToSSHConfig bool
+	var groupNames []string
 
 	cmd := &cobra.Command{
 		Use:   "add [-p PORT] [-d DIR] [-J JUMP] NAME target [password]",
@@ -61,6 +62,11 @@ and the password is encrypted with your master passphrase.`,
 			if saveTarget == "" {
 				return nil // user aborted
 			}
+			// Resolve every group before creating a connection in either backend.
+			groupIDs, err := db.GroupIDsByNames(sharedDB, groupNames)
+			if err != nil {
+				return err
+			}
 
 			// Password handling.
 			if hasPassword {
@@ -95,9 +101,25 @@ and the password is encrypted with your master passphrase.`,
 				if err := sshconfig.Insert(p, conn); err != nil {
 					return err
 				}
+				if len(groupIDs) > 0 {
+					ref, err := sshConfigMembershipRef(name)
+					if err != nil {
+						if rollbackErr := sshconfig.Delete(p, name); rollbackErr != nil {
+							return fmt.Errorf("resolve ssh_config group assignment: %w (connection rollback failed: %v)", err, rollbackErr)
+						}
+						return err
+					}
+					if err := db.SetConnectionGroups(sharedDB, ref, groupIDs); err != nil {
+						if rollbackErr := sshconfig.Delete(p, name); rollbackErr != nil {
+							return fmt.Errorf("assign groups to ssh_config connection: %w (connection rollback failed: %v)", err, rollbackErr)
+						}
+						return fmt.Errorf("assign groups to ssh_config connection: %w", err)
+					}
+				}
 				success("Added connection %q to ssh_config (%s@%s:%d)", name, user, host, parsedPort)
 			} else {
-				if err := db.Insert(sharedDB, conn); err != nil {
+				ref := model.ConnectionRef{Source: model.SourceSQLite, Name: name}
+				if err := db.InsertWithGroups(sharedDB, conn, ref, groupIDs); err != nil {
 					return err
 				}
 				success("Added connection %q to SQLite (%s@%s:%d)", name, user, host, parsedPort)
@@ -113,6 +135,7 @@ and the password is encrypted with your master passphrase.`,
 	cmd.Flags().StringVarP(&proxyJump, "proxy-jump", "J", "", "ProxyJump host (user@bastion / host1,host2)")
 	cmd.Flags().BoolVar(&addToSQLite, "sqlite", false, "Save to SQLite")
 	cmd.Flags().BoolVar(&addToSSHConfig, "sshconfig", false, "Save to ssh_config")
+	cmd.Flags().StringSliceVar(&groupNames, "group", nil, "Assign to an existing group (repeatable)")
 	return cmd
 }
 

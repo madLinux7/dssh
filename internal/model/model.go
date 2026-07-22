@@ -7,17 +7,19 @@ import (
 
 // ReservedNames are CLI subcommand names that cannot be used as connection names.
 var ReservedNames = map[string]bool{
-	"add":    true,
-	"rm":     true,
-	"list":   true,
-	"ls":     true,
-	"new":    true,
-	"create": true,
-	"edit":   true,
-	"delete": true,
-	"reset":  true,
-	"help":   true,
-	"config": true,
+	"add":     true,
+	"rm":      true,
+	"list":    true,
+	"ls":      true,
+	"new":     true,
+	"create":  true,
+	"edit":    true,
+	"delete":  true,
+	"group":   true,
+	"connect": true,
+	"reset":   true,
+	"help":    true,
+	"config":  true,
 }
 
 // ErrReservedName is returned when a connection name conflicts with a CLI command.

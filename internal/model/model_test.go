@@ -6,7 +6,7 @@ import (
 )
 
 func TestValidateNameRejectsReserved(t *testing.T) {
-	reserved := []string{"add", "rm", "list", "ls", "new", "create", "edit", "delete", "reset", "help", "config"}
+	reserved := []string{"add", "rm", "list", "ls", "new", "create", "edit", "delete", "reset", "help", "config", "group", "connect"}
 	for _, name := range reserved {
 		if err := ValidateName(name); err == nil {
 			t.Errorf("expected error for reserved name %q", name)

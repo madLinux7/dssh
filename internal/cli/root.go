@@ -71,6 +71,7 @@ func newRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().BoolVar(&flagBoth, "both", false, "use both mode for this session")
 
 	root.AddCommand(
+		newConnectCmd(),
 		newAddCmd(),
 		newRmCmd(),
 		newListCmd(),
@@ -79,9 +80,24 @@ func newRootCmd(version string) *cobra.Command {
 		newDeleteCmd(),
 		newResetCmd(),
 		newConfigCmd(),
+		newGroupCmd(),
 	)
 
 	return root
+}
+
+func newConnectCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "connect NAME [-- extra-ssh-args...]",
+		Short: "Connect to a saved host by name",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, extraArgs := splitArgs(args)
+			return connectByName(name, extraArgs)
+		},
+	}
+	cmd.Flags().SetInterspersed(false)
+	return cmd
 }
 
 // persistentPreRun opens the DB and loads (or bootstraps) the runtime config.
@@ -89,6 +105,10 @@ func persistentPreRun(cmd *cobra.Command, args []string) error {
 	// Reset command manages the DB file itself — skip shared setup.
 	if cmd.Name() == "reset" {
 		return nil
+	}
+
+	if (flagSQLite && flagSSHConfig) || (flagSQLite && flagBoth) || (flagSSHConfig && flagBoth) {
+		return fmt.Errorf("use at most one of --sqlite, --sshconfig, and --both")
 	}
 
 	d, err := db.Open()
