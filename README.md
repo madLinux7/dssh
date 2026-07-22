@@ -17,12 +17,12 @@ Passwords are encrypted using a master passphrase (_you should consider using pu
 📚 **Full docs:** [dssh.grolmes.com](https://dssh.grolmes.com)
 
 <p align="center">
-  <img src="demo_tabs.gif" alt="dssh tab navigation"><br>
+  <img src="https://raw.githubusercontent.com/madLinux7/dssh-artifacts/refs/heads/main/demo_tabs.gif" alt="dssh tab navigation"><br>
   <sub>TUI navigation</sub>
 </p>
 
 <p align="center">
-  <img src="demo_1.gif" alt="dssh demo"><br>
+  <img src="https://raw.githubusercontent.com/madLinux7/dssh-artifacts/refs/heads/main/demo_1.gif" alt="dssh demo"><br>
   <sub>TUI connect</sub>
 </p>
 
@@ -107,7 +107,7 @@ More on the [security model](https://dssh.grolmes.com/guides/security/) and [con
 
 On first launch, dssh asks you to choose a connection mode:
 
-![test](demo_welcome.gif)
+![test](https://raw.githubusercontent.com/madLinux7/dssh-artifacts/refs/heads/main/demo_welcome.gif)
 
 | Mode | Description |
 |---|---|
@@ -233,7 +233,7 @@ dssh create
 dssh new # alias
 ```
 
-![dssh wizard](demo_wizard.gif)
+![dssh wizard](https://raw.githubusercontent.com/madLinux7/dssh-artifacts/refs/heads/main/demo_wizard.gif)
 
 The wizard supports both key-based and password-based authentication. For password auth, you'll be prompted to create a master passphrase on first use.
 
@@ -284,7 +284,7 @@ Switch between SQLite, ssh_config, or both at any time.
 dssh config
 ```
 
-![dssh config](demo_config.gif)
+![dssh config](https://raw.githubusercontent.com/madLinux7/dssh-artifacts/refs/heads/main/demo_config.gif)
 
 View current settings:
 
