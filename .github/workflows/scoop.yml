@@ -38,7 +38,7 @@ jobs:
           echo "sha256=$(sha256sum dssh.exe | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout scoop-bucket
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: madLinux7/scoop-bucket
           token: ${{ secrets.SCOOP_TOKEN }}
