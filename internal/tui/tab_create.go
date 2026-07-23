@@ -323,6 +323,9 @@ func (m CreateModel) View() string {
 
 	b.WriteString(paneTitleStyle(m.active).MarginBottom(0).Render("New Connection"))
 	b.WriteString("\n")
+	if !compact {
+		b.WriteString("\n")
+	}
 
 	labels := [fieldCount]string{"Name", "User", "Host", "Port", "Directory", "Identity File", "Password", "ProxyJump"}
 
