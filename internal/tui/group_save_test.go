@@ -103,3 +103,53 @@ func TestEscapeFromEditAssignmentDiscardsEntireDraft(t *testing.T) {
 		t.Fatalf("cancel changed durable assignments: %v, err %v", ids, err)
 	}
 }
+
+func TestHidingRightPaneDiscardsCreateAssignmentDraft(t *testing.T) {
+	d := newTUITestDB(t)
+	group, _ := db.CreateGroup(d, "Production")
+	app := newAppModel(nil, d, TabCreate, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyTab})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyDown})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeySpace})
+	if ids := app.createAssignment.SelectedGroupIDs(); len(ids) != 1 || ids[0] != group.ID {
+		t.Fatalf("create draft IDs = %v, want [%d]", ids, group.ID)
+	}
+
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyCtrlP})
+	if ids := app.createAssignment.SelectedGroupIDs(); len(ids) != 0 {
+		t.Fatalf("hidden pane kept create assignment draft: %v", ids)
+	}
+}
+
+func TestHidingRightPaneRestoresPersistedEditAssignments(t *testing.T) {
+	d := newTUITestDB(t)
+	group, _ := db.CreateGroup(d, "Production")
+	connection := model.Connection{
+		Name: "api", User: "root", Host: "api.example", Port: 22,
+		AuthType: model.AuthKey, Source: model.SourceSQLite,
+	}
+	if err := db.InsertWithGroups(d, &connection, model.ConnectionRef{Source: model.SourceSQLite, Name: "api"}, []int64{group.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	app := newAppModel([]model.Connection{connection}, d, TabEdit, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyEnter})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyTab})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeySpace})
+	if ids := app.editAssignment.SelectedGroupIDs(); len(ids) != 0 {
+		t.Fatalf("edit draft IDs = %v, want no groups", ids)
+	}
+
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyCtrlP})
+	if ids := app.editAssignment.SelectedGroupIDs(); len(ids) != 1 || ids[0] != group.ID {
+		t.Fatalf("hidden pane did not restore persisted assignments: %v", ids)
+	}
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyCtrlS})
+
+	ids, err := db.GroupIDsForConnection(d, model.ConnectionRef{Source: model.SourceSQLite, Name: "api"})
+	if err != nil || len(ids) != 1 || ids[0] != group.ID {
+		t.Fatalf("save after hiding pane changed durable assignments: %v, err %v", ids, err)
+	}
+}

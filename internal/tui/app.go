@@ -41,7 +41,10 @@ const (
 	PaneRight
 )
 
-const settingShowHints = "tui_show_hints"
+const (
+	settingShowHints     = "tui_show_hints"
+	settingShowRightPane = "tui_show_right_pane"
+)
 
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
@@ -61,6 +64,7 @@ type AppModel struct {
 	height         int
 	activePane     Pane
 	showHints      bool
+	showRightPane  bool
 
 	// Session-level navigation shared by the connection tabs.
 	connectionQuery        string
@@ -129,15 +133,19 @@ func newAppModel(connections []model.Connection, d *sql.DB, initialTab Tab, cfg 
 		activeSource:                model.SourceSQLite,
 		activePane:                  PaneLeft,
 		showHints:                   true,
+		showRightPane:               true,
 		groupPane:                   newGroupPaneModel(nil, 34, 12),
 		createAssignment:            newGroupAssignmentModel(nil, nil, 0, 34, 12),
 		editAssignment:              newGroupAssignmentModel(nil, nil, 0, 34, 12),
 		createAssignmentInitialized: initialTab == TabCreate,
 	}
-	
+
 	if d != nil {
 		if value, err := db.GetSetting(d, settingShowHints); err == nil && string(value) == "false" {
 			m.showHints = false
+		}
+		if value, err := db.GetSetting(d, settingShowRightPane); err == nil && string(value) == "false" {
+			m.showRightPane = false
 		}
 	}
 
@@ -209,19 +217,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		separator := m.width / 2
-		leftContentWidth := max(1, separator-5)
-		rightContentWidth := max(1, m.width-separator-6)
-		paneHeight := max(1, m.height-6)
-		paneBodyHeight := max(1, paneHeight-2)
-		m.connectModel.SetSize(leftContentWidth, paneBodyHeight)
-		m.createModel.SetSize(leftContentWidth, paneBodyHeight)
-		m.editModel.SetSize(leftContentWidth, paneBodyHeight)
-		m.deleteModel.SetSize(leftContentWidth, paneBodyHeight)
-		m.groupPane.SetSize(rightContentWidth, paneBodyHeight)
-		m.createAssignment.SetSize(rightContentWidth, paneBodyHeight)
-		m.editAssignment.SetSize(rightContentWidth, paneBodyHeight)
-		m.modal.SetSize(m.width, m.height)
+		m.resizePanes()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -287,6 +283,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m = m.toggleHints()
 			return m, nil
+		case "ctrl+p":
+			m = m.toggleRightPane()
+			return m, nil
 		case "ctrl+s":
 			switch {
 			case m.activeTab == TabCreate:
@@ -326,6 +325,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "tab", "shift+tab":
+			if !m.showRightPane {
+				return m, nil
+			}
 			if m.activePane == PaneLeft {
 				m.activePane = PaneRight
 			} else {
@@ -903,18 +905,31 @@ func (m AppModel) View() string {
 		leftStatus = m.deleteModel.statusStyle.Render(m.deleteModel.statusMsg)
 	}
 
-	base := renderSplitScreen(
-		tabBar,
-		leftContent,
-		rightContent,
-		leftStatus,
-		rightStatus,
-		m.leftPaneHints(),
-		m.rightPaneHints(),
-		m.width,
-		m.height,
-		accentColor,
-	)
+	var base string
+	if m.showRightPane {
+		base = renderSplitScreen(
+			tabBar,
+			leftContent,
+			rightContent,
+			leftStatus,
+			rightStatus,
+			m.leftPaneHints(),
+			m.rightPaneHints(),
+			m.width,
+			m.height,
+			accentColor,
+		)
+	} else {
+		base = renderSinglePaneScreen(
+			tabBar,
+			leftContent,
+			leftStatus,
+			m.leftPaneHints(),
+			m.width,
+			m.height,
+			accentColor,
+		)
+	}
 	if m.showModal {
 		return compositePopover(base, m.modal.BoxView(), m.width, m.height)
 	}
@@ -930,6 +945,12 @@ func (m AppModel) View() string {
 func (m AppModel) leftPaneHints() string {
 	if !m.showHints {
 		return statusStyle.Render("? help")
+	}
+	if m.width <= minimumTerminalWidth {
+		if m.showRightPane {
+			return statusStyle.Render("CTRL+P hide panel • ? hide help")
+		}
+		return statusStyle.Render("CTRL+P show panel • ? hide help")
 	}
 
 	var hints string
@@ -947,18 +968,26 @@ func (m AppModel) leftPaneHints() string {
 	case TabDelete:
 		hints = "TAB pane • ↑/↓ navigate • ENTER ×3 delete • ←/→ tabs • ESC exit"
 	}
-	return statusStyle.Render(hints)
+	if m.showRightPane {
+		hints += " • CTRL+P hide panel"
+	} else {
+		hints += " • CTRL+P show panel"
+	}
+	return statusStyle.Render(hints + " • ? hide help")
 }
 
 func (m AppModel) rightPaneHints() string {
 	if !m.showHints {
 		return ""
 	}
+	if m.width <= minimumTerminalWidth {
+		return statusStyle.Render("CTRL+N new • CTRL+P hide panel • ? hide help")
+	}
 
 	if m.assignmentMode() {
-		return statusStyle.Render("TAB pane • ↑/↓ navigate • SPACE assign • CTRL+N new • CTRL+S save")
+		return statusStyle.Render("TAB pane • ↑/↓ navigate • SPACE assign • CTRL+N new • CTRL+S save • CTRL+P hide panel • ? hide help")
 	}
-	return statusStyle.Render("TAB pane • ↑/↓ navigate • CTRL+N new • CTRL+R rename • CTRL+D delete")
+	return statusStyle.Render("TAB pane • ↑/↓ navigate • CTRL+N new • CTRL+R rename • CTRL+D delete • CTRL+P hide panel • ? hide help")
 }
 
 func (m AppModel) toggleHints() AppModel {
@@ -971,6 +1000,62 @@ func (m AppModel) toggleHints() AppModel {
 	}
 	m.showHints = showHints
 	return m
+}
+
+func (m AppModel) toggleRightPane() AppModel {
+	showRightPane := !m.showRightPane
+	if m.database != nil {
+		if err := db.SetSetting(m.database, settingShowRightPane, []byte(strconv.FormatBool(showRightPane))); err != nil {
+			m.setError("save right pane visibility: %s", err)
+			return m
+		}
+	}
+	m.showRightPane = showRightPane
+	if !m.showRightPane {
+		m.activePane = PaneLeft
+		m.resetHiddenPaneState()
+	}
+	m.resizePanes()
+	m.applyPaneFocus()
+	return m
+}
+
+func (m *AppModel) resetHiddenPaneState() {
+	m.groupPane.SelectGroup(0)
+	m.applyGroupFilter()
+	m.createAssignment.Begin(m.groups, nil, 0)
+
+	var editGroupIDs []int64
+	if m.activeTab == TabEdit && m.editModel.editing && m.database != nil {
+		ids, err := db.GroupIDsForConnection(m.database, m.connectionRef(m.editModel.origConn))
+		if err != nil {
+			m.setError("load connection groups: %s", err)
+		} else {
+			editGroupIDs = ids
+		}
+	}
+	m.editAssignment.Begin(m.groups, editGroupIDs, 0)
+}
+
+func (m *AppModel) resizePanes() {
+	leftContentWidth, rightContentWidth := singlePaneContentWidth(m.width), 0
+	if m.showRightPane {
+		separator := m.width / 2
+		leftContentWidth = max(1, separator-5)
+		rightContentWidth = max(1, m.width-separator-6)
+	}
+	paneHeight := max(1, m.height-6)
+	paneBodyHeight := max(1, paneHeight-2)
+	m.connectModel.SetSize(leftContentWidth, paneBodyHeight)
+	m.createModel.SetSize(leftContentWidth, paneBodyHeight)
+	m.editModel.SetSize(leftContentWidth, paneBodyHeight)
+	m.deleteModel.SetSize(leftContentWidth, paneBodyHeight)
+	if rightContentWidth > 0 {
+		m.groupPane.SetSize(rightContentWidth, paneBodyHeight)
+		m.createAssignment.SetSize(rightContentWidth, paneBodyHeight)
+		m.editAssignment.SetSize(rightContentWidth, paneBodyHeight)
+	}
+	m.modal.SetSize(m.width, m.height)
 }
 
 // onConnectionEdited syncs all tab lists after an edit.

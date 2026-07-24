@@ -44,6 +44,28 @@ func TestSplitScreenHasExactGeometryAndPerPaneMargins(t *testing.T) {
 	}
 }
 
+func TestSinglePaneScreenHasExactGeometryWithoutCenterSeparator(t *testing.T) {
+	const width, height = 100, 24
+	tabBar := renderMainTabBar([]string{"Create", "Connect", "Edit", "Delete"}, TabConnect, width, "SQLite", purple)
+	view := renderSinglePaneScreen(tabBar, "LEFT", "", "left hints", width, height, purple)
+	plain := ansi.Strip(view)
+	lines := strings.Split(plain, "\n")
+	if len(lines) != height {
+		t.Fatalf("line count = %d, want %d", len(lines), height)
+	}
+	for i, line := range lines {
+		if got := lipgloss.Width(line); got != width {
+			t.Fatalf("line %d width = %d, want %d: %q", i, got, width, line)
+		}
+	}
+	if got := []rune(lines[3])[width/2]; got == '│' {
+		t.Fatalf("center separator = %q, want no separator", got)
+	}
+	if !strings.HasPrefix(lines[4], "│  LEFT") {
+		t.Fatalf("single-pane padding/content = %q", lines[4])
+	}
+}
+
 func TestCompositePopoverPreservesBackground(t *testing.T) {
 	background := strings.Repeat("background line\n", 9) + "background line"
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render("Dialog")

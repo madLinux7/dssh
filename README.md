@@ -169,8 +169,10 @@ Change your mode anytime with `dssh config`. View current settings with `dssh co
 | `Ctrl+R` | Rename the selected group |
 | `Ctrl+D` | Delete the selected group (connections are kept) |
 | `Ctrl+L` | Toggle SQLite / ssh_config list (both mode) |
+| `Ctrl+P` | Hide / show the right pane |
 | `Ctrl+T` | Toggle key / password auth (create/edit) |
 | `Ctrl+S` | Save a new or edited connection from either pane |
+| `?` | Hide / show key hints |
 | `ESC` / `Ctrl+C` | Quit |
 
 The right pane filters the connection list as soon as you select a group. Selecting `(No Groups)` shows all connections.

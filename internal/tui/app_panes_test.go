@@ -217,6 +217,92 @@ func TestHintsTogglePersistsAndRestores(t *testing.T) {
 	}
 }
 
+func TestRightPaneTogglePersistsAndExpandsLeftPane(t *testing.T) {
+	d := newTUITestDB(t)
+	app := newAppModel(nil, d, TabCreate, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})
+	if !app.showRightPane || !strings.Contains(ansi.Strip(app.View()), "Assign Groups") {
+		t.Fatalf("new app did not show the right pane:\n%s", ansi.Strip(app.View()))
+	}
+
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyCtrlP})
+	plain := ansi.Strip(app.View())
+	if app.showRightPane || app.activePane != PaneLeft || strings.Contains(plain, "Assign Groups") {
+		t.Fatalf("collapsed pane rendered incorrectly:\n%s", plain)
+	}
+	for i, line := range strings.Split(plain, "\n") {
+		if got := lipgloss.Width(line); got != 100 {
+			t.Fatalf("collapsed line %d width = %d, want 100", i, got)
+		}
+	}
+	if got := []rune(strings.Split(plain, "\n")[3])[50]; got == '│' {
+		t.Fatalf("collapsed layout retained center separator")
+	}
+	value, err := db.GetSetting(d, settingShowRightPane)
+	if err != nil || string(value) != "false" {
+		t.Fatalf("saved collapsed-pane setting = %q, err %v", value, err)
+	}
+
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyTab})
+	if app.activePane != PaneLeft {
+		t.Fatalf("tab moved focus into hidden pane: %v", app.activePane)
+	}
+
+	restored := newAppModel(nil, d, TabCreate, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	restored = updateApp(t, restored, tea.WindowSizeMsg{Width: 100, Height: 24})
+	if restored.showRightPane || strings.Contains(ansi.Strip(restored.View()), "Assign Groups") {
+		t.Fatalf("new app did not restore collapsed pane:\n%s", ansi.Strip(restored.View()))
+	}
+	restored = updateApp(t, restored, tea.KeyMsg{Type: tea.KeyCtrlP})
+	if !restored.showRightPane || !strings.Contains(ansi.Strip(restored.View()), "Assign Groups") {
+		t.Fatalf("right pane did not restore:\n%s", ansi.Strip(restored.View()))
+	}
+	value, err = db.GetSetting(d, settingShowRightPane)
+	if err != nil || string(value) != "true" {
+		t.Fatalf("saved expanded-pane setting = %q, err %v", value, err)
+	}
+}
+
+func TestHidingRightPaneResetsTheActiveGroupFilter(t *testing.T) {
+	d := newTUITestDB(t)
+	group, err := db.CreateGroup(d, "Production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetConnectionGroups(d, model.ConnectionRef{Source: model.SourceSQLite, Name: "beta"}, []int64{group.ID}); err != nil {
+		t.Fatal(err)
+	}
+	connections := []model.Connection{
+		{Name: "alpha", Source: model.SourceSQLite},
+		{Name: "beta", Source: model.SourceSQLite},
+	}
+	app := newAppModel(connections, d, TabConnect, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyTab})
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyDown})
+	if app.groupPane.SelectedGroupID() != group.ID || app.connectModel.SelectedName() != "beta" {
+		t.Fatalf("group filter was not active before collapse")
+	}
+
+	app = updateApp(t, app, tea.KeyMsg{Type: tea.KeyCtrlP})
+	if app.groupPane.SelectedGroupID() != 0 {
+		t.Fatalf("hidden pane kept group filter %d", app.groupPane.SelectedGroupID())
+	}
+	plain := ansi.Strip(app.View())
+	if !strings.Contains(plain, "alpha") || !strings.Contains(plain, "beta") {
+		t.Fatalf("collapsed pane kept filtered connection list:\n%s", plain)
+	}
+}
+
+func TestVisiblePaneHintsIncludePanelAndHelpControls(t *testing.T) {
+	app := newAppModel(nil, nil, TabConnect, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
+	app = updateApp(t, app, tea.WindowSizeMsg{Width: 120, Height: 24})
+	plain := ansi.Strip(app.View())
+	if strings.Count(plain, "CTRL+P hide panel") != 2 || strings.Count(plain, "? hide help") != 2 {
+		t.Fatalf("pane controls missing from visible hints:\n%s", plain)
+	}
+}
+
 func TestPassphraseDialogIsCompositedOverCurrentPanes(t *testing.T) {
 	app := newAppModel(nil, nil, TabCreate, &model.RuntimeConfig{ParseMode: model.ParseModeSQLiteOnly})
 	app = updateApp(t, app, tea.WindowSizeMsg{Width: 100, Height: 24})

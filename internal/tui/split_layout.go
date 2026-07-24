@@ -74,6 +74,43 @@ func renderSplitScreen(
 	return strings.Join(append(barLines[:3], frameLines...), "\n")
 }
 
+// renderSinglePaneScreen renders the shared tab bar and a full-width left pane.
+func renderSinglePaneScreen(
+	tabBar, body, status, hints string,
+	width, height int,
+	accent lipgloss.Color,
+) string {
+	contentWidth := singlePaneContentWidth(width)
+	interiorHeight := max(1, height-4)
+	contentHeight := max(1, interiorHeight-2)
+	lines := renderPaneBlock(body, status, hints, contentWidth, contentHeight)
+
+	barLines := strings.Split(tabBar, "\n")
+	for len(barLines) < 3 {
+		barLines = append(barLines, "")
+	}
+
+	borderStyle := lipgloss.NewStyle().Foreground(accent)
+	frameLines := make([]string, 0, interiorHeight+1)
+	for row := 0; row < interiorHeight; row++ {
+		content := strings.Repeat(" ", contentWidth)
+		if row > 0 && row < interiorHeight-1 {
+			contentRow := row - 1
+			if contentRow < len(lines) {
+				content = lines[contentRow]
+			}
+		}
+		frameLines = append(frameLines, borderStyle.Render("│")+"  "+content+"  "+borderStyle.Render("│"))
+	}
+	frameLines = append(frameLines, borderStyle.Render("╰"+strings.Repeat("─", max(0, width-2))+"╯"))
+
+	return strings.Join(append(barLines[:3], frameLines...), "\n")
+}
+
+func singlePaneContentWidth(width int) int {
+	return max(1, width-6)
+}
+
 func renderPaneBlock(body, status, hints string, width, height int) []string {
 	bodyLines := splitNonEmptyBlock(body)
 	statusLines := splitWrappedBlock(status, width)
